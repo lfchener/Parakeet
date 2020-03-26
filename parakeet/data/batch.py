@@ -141,20 +141,20 @@ def batch_spec(minibatch, pad_value=0., dtype=np.float32):
         mono_channel = False
 
     # assume (channel, F, n_frame) or (F, n_frame)
-    lengths = [example.shape[-1] for example in minibatch]
+    lengths = [example.shape[0] for example in minibatch]
     max_len = np.max(lengths)
 
     batch = []
     for example in minibatch:
-        pad_len = max_len - example.shape[-1]
+        pad_len = max_len - example.shape[0]
         if mono_channel:
-            batch.append(
-                np.pad(example, [(0, 0), (0, pad_len)],
+            a = np.pad(example, [(0, pad_len), (0, 0)],
                        mode='constant',
-                       constant_values=pad_value))
+                       constant_values=pad_value)
+            batch.append(a)
         else:
             batch.append(
-                np.pad(example, [(0, 0), (0, 0), (0, pad_len)],
+                np.pad(example, [(0, 0), (0, pad_len), (0, 0)],
                        mode='constant',
                        constant_values=pad_value))
 

@@ -19,6 +19,7 @@ from parse import add_config_options_to_parser
 from pprint import pprint
 from ruamel import yaml
 import numpy as np
+import librosa
 import paddle.fluid as fluid
 import paddle.fluid.dygraph as dg
 from parakeet.g2p.en import text_to_sequence
@@ -102,9 +103,13 @@ def synthesis(text_input, args):
             sound_norm=False)
 
         mel_output_postnet = fluid.layers.transpose(
-            fluid.layers.squeeze(mel_output_postnet, [0]), [1, 0])
-        wav = _ljspeech_processor.inv_melspectrogram(mel_output_postnet.numpy(
-        ))
+            fluid.layers.squeeze(mel_output_postnet, [0]), [1, 0]).numpy()
+        mel_output_postnet = np.exp(mel_output_postnet)
+        basis = librosa.filters.mel(cfg['audio']['sr'], cfg['audio']['n_fft'], n_mels=cfg['audio']['num_mels'], )
+        inv_basis = np.linalg.pinv(basis)
+        spec = np.maximum(1e-10, np.dot(inv_basis, mel_output_postnet))
+
+        wav = librosa.core.griffinlim(spec ** 1.5, hop_length=256, win_length=1024)
         writer.add_audio(text_input, wav, 0, cfg['audio']['sr'])
         print("Synthesis completed !!!")
     writer.close()
@@ -114,4 +119,4 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Train Fastspeech model")
     add_config_options_to_parser(parser)
     args = parser.parse_args()
-    synthesis("Transformer model is so fast!", args)
+    synthesis("Simple as this proposition is, it is necessary to be stated,!", args)

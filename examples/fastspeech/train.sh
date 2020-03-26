@@ -1,6 +1,6 @@
 # train model
 # if you wish to resume from an exists model, uncomment --checkpoint_path and --fastspeech_step
-export CUDA_VISIBLE_DEVICES=0
+export CUDA_VISIBLE_DEVICES=1
 python -u train.py \
 --batch_size=32 \
 --epochs=10000 \
@@ -10,7 +10,7 @@ python -u train.py \
 --use_data_parallel=0 \
 --data_path='../../dataset/LJSpeech-1.1' \
 --transtts_path='../transformer_tts/checkpoint' \
---transformer_step=160000 \
+--transformer_step=120000 \
 --save_path='./checkpoint' \
 --log_dir='./log' \
 --config_path='configs/fastspeech.yaml' \

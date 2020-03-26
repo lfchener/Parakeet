@@ -31,7 +31,7 @@ from parakeet.models.transformer_tts.transformer_tts import TransformerTTS
 from parakeet.models.fastspeech.fastspeech import FastSpeech
 from parakeet.models.fastspeech.utils import get_alignment
 import sys
-sys.path.append("../transformer_tts")
+#sys.path.append("../transformer_tts")
 from data import LJSpeechLoader
 
 
@@ -66,13 +66,6 @@ def main(args):
     writer = SummaryWriter(path) if local_rank == 0 else None
 
     with dg.guard(place):
-        with fluid.unique_name.guard():
-            transformer_tts = TransformerTTS(cfg)
-            model_dict, _ = load_checkpoint(
-                str(args.transformer_step),
-                os.path.join(args.transtts_path, "transformer"))
-            transformer_tts.set_dict(model_dict)
-            transformer_tts.eval()
 
         model = FastSpeech(cfg)
         model.train()
@@ -103,31 +96,7 @@ def main(args):
                 pbar.set_description('Processing at epoch %d' % epoch)
                 (character, mel, mel_input, pos_text, pos_mel, text_length,
                  mel_lens, enc_slf_mask, enc_query_mask, dec_slf_mask,
-                 enc_dec_mask, dec_query_slf_mask, dec_query_mask) = data
-
-                _, _, attn_probs, _, _, _ = transformer_tts(
-                    character,
-                    mel_input,
-                    pos_text,
-                    pos_mel,
-                    dec_slf_mask=dec_slf_mask,
-                    enc_slf_mask=enc_slf_mask,
-                    enc_query_mask=enc_query_mask,
-                    enc_dec_mask=enc_dec_mask,
-                    dec_query_slf_mask=dec_query_slf_mask,
-                    dec_query_mask=dec_query_mask)
-                alignment, max_attn = get_alignment(attn_probs, mel_lens,
-                                                    cfg['transformer_head'])
-                alignment = dg.to_variable(alignment).astype(np.float32)
-
-                if local_rank == 0 and global_step % 5 == 1:
-                    x = np.uint8(
-                        cm.viridis(max_attn[8, :mel_lens.numpy()[8]]) * 255)
-                    writer.add_image(
-                        'Attention_%d_0' % global_step,
-                        x,
-                        0,
-                        dataformats="HWC")
+                 enc_dec_mask, dec_query_slf_mask, dec_query_mask, alignment) = data
 
                 global_step += 1
 
