@@ -11,6 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
 import math
 import paddle.fluid.dygraph as dg
 import paddle.fluid as fluid
@@ -18,7 +19,12 @@ import paddle.fluid.layers as layers
 
 
 class PreNet(dg.Layer):
-    def __init__(self, input_size, hidden_size, output_size, dropout_rate=0.2):
+    def __init__(self,
+                 input_size,
+                 hidden_size,
+                 output_size,
+                 dropout_rate=0.2,
+                 bias=True):
         """Prenet before passing through the network.
 
         Args:
@@ -33,22 +39,31 @@ class PreNet(dg.Layer):
         self.output_size = output_size
         self.dropout_rate = dropout_rate
 
-        k = math.sqrt(1.0 / input_size)
+        if bias:
+            k = math.sqrt(1.0 / input_size)
+            bias_attr = fluid.ParamAttr(initializer=fluid.initializer.Uniform(
+                low=-k, high=k))
+        else:
+            bias_attr = False
         self.linear1 = dg.Linear(
             input_size,
             hidden_size,
             param_attr=fluid.ParamAttr(
                 initializer=fluid.initializer.XavierInitializer()),
-            bias_attr=fluid.ParamAttr(initializer=fluid.initializer.Uniform(
-                low=-k, high=k)))
-        k = math.sqrt(1.0 / hidden_size)
+            bias_attr=bias_attr)
+        if bias:
+            k = math.sqrt(1.0 / hidden_size)
+            bias_attr = fluid.ParamAttr(initializer=fluid.initializer.Uniform(
+                low=-k, high=k))
+        else:
+            bias_attr = False
+
         self.linear2 = dg.Linear(
             hidden_size,
             output_size,
             param_attr=fluid.ParamAttr(
                 initializer=fluid.initializer.XavierInitializer()),
-            bias_attr=fluid.ParamAttr(initializer=fluid.initializer.Uniform(
-                low=-k, high=k)))
+            bias_attr=bias_attr)
 
     def forward(self, x):
         """

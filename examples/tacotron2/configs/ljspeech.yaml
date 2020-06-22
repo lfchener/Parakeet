@@ -1,0 +1,37 @@
+audio:
+  num_mels: 80  #the number of mel bands when calculating mel spectrograms.
+  n_fft: 2048 #the number of fft components.
+  sr: 22050 #the sampling rate of audio data file.
+  hop_length: 256 #the number of samples to advance between frames.
+  win_length: 1024 #the length (width) of the window function.
+  mel_fmin: 0
+  mel_fmax: 8000
+
+network:
+  n_frames_per_step: 1
+  symbols_embedding_dim: 512
+  encoder_n_convs: 3
+  encoder_embedding_dim: 512
+  encoder_kernel_size: 5
+  prenet_dim: 256
+  attention_rnn_dim: 1024
+  decoder_rnn_dim: 1024
+  attention_dim: 128
+  attention_location_n_filters: 32
+  attention_location_kernel_size: 31
+  p_attention_dropout: 0.1
+  p_decoder_dropout: 0.1
+  postnet_embedding_dim: 512
+  postnet_kernel_size: 5
+  postnet_n_convs: 5
+
+train:
+  batch_size: 32
+  learning_rate: 0.001
+  weight_decay: 0.000001
+  grad_clip_thresh: 1.0 #the threshold of grad clip.
+
+  checkpoint_interval: 1000
+  image_interval: 2000
+  max_iteration: 500000
+

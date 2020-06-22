@@ -125,7 +125,7 @@ def alignments(args):
             alignment, _ = get_alignment(attn_probs, mel_lens,
                                          network_cfg['decoder_num_head'])
             alignments[fname] = alignment
-        with open(args.output + '.txt', "wb") as f:
+        with open(args.output + '.pkl', "wb") as f:
             pickle.dump(alignments, f)
 
 
