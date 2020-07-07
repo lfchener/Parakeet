@@ -137,7 +137,6 @@ def main(args):
         post_mel_loss = paddle.nn.MSELoss()(mel_outputs_postnet, mels)
         gate_loss = paddle.nn.BCELoss()(gate_outputs, stop_tokens)
         total_loss = mel_loss + post_mel_loss + gate_loss
-
         if local_rank == 0:
             writer.add_scalar('mel_loss', mel_loss.numpy(), global_step)
             writer.add_scalar('post_mel_loss',

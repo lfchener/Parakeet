@@ -61,12 +61,10 @@ class LocationSensitiveAttention(dg.Layer):
     def forward(self,
                 attention_hidden_state,
                 memory,
-                processed_memory,
                 attention_weights_cat,
                 mask=None):
         # attention_hidden_state.shape = [B, C]
         # memory.shape = [B, T, C]
-        # processed_memory.shape = [B, T, C]
         # attention_weights_cat.shape = [B, 2, T]
         # mask.shape = [B, T]
 
@@ -76,6 +74,7 @@ class LocationSensitiveAttention(dg.Layer):
                 attention_hidden_state, axes=[1]))  #[B, 1, C]
         processed_attention_weights = self.location_layer(
             attention_weights_cat)  #[B, T, C]
+        processed_memory = self.memory_layer(memory)
         energies = self.value(
             layers.tanh(processed_query + processed_attention_weights +
                         processed_memory))  #[B, T, 1]

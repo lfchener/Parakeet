@@ -87,8 +87,6 @@ class Decoder(dg.Layer):
             shape=[batch_size, self.encoder_embedding_dim], dtype=memory.dtype)
 
         self.memory = memory  #[B, T, C]
-        self.processed_memory = self.attention_layer.memory_layer(
-            memory)  #[B, T, C]
         self.mask = mask  #[B, T]
 
     def decode(self, decoder_input):
@@ -109,8 +107,8 @@ class Decoder(dg.Layer):
             axis=1)  #[B, 2, T]
 
         self.attention_context, self.attention_weights = self.attention_layer(
-            self.attention_hidden, self.memory, self.processed_memory,
-            attention_weights_cat, self.mask)  #[B, C], [B, T]
+            self.attention_hidden, self.memory, attention_weights_cat,
+            self.mask)  #[B, C], [B, T]
 
         self.attention_weights_cum += self.attention_weights  #[B, T]
         decoder_input = layers.concat(
@@ -144,7 +142,6 @@ class Decoder(dg.Layer):
 
         self.initialize_decoder_states(
             memory, mask=1 - layers.sequence_mask(x=memory_lens))
-
         mel_outputs, gate_outputs, alignments = [], [], []
         while len(mel_outputs) < decoder_inputs.shape[1] - 1:
             decoder_input = decoder_inputs[:, len(mel_outputs), :]  #[B, C]
