@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import math
+import paddle
 import paddle.fluid.dygraph as dg
 import paddle.fluid as fluid
 import paddle.fluid.layers as layers
@@ -70,11 +71,11 @@ class Encoder(dg.Layer):
             self.add_sublayer("convolutions_{}".format(i), conv)
             self.add_sublayer("batchnorms{}".format(i), batchnorm)
         self.dropout = dg.Dropout(
-            p=0.0, dropout_implementation='upscale_in_train')  #0.5
+            p=0.5, dropout_implementation='upscale_in_train')
 
-        self.lstm_forward = DynamicLSTM(embedding_dim, int(embedding_dim / 2))
-        self.lstm_reverse = DynamicLSTM(
-            embedding_dim, int(embedding_dim / 2), is_reverse=True)
+        self.hidden_size = int(embedding_dim / 2)
+        self.lstm = paddle.nn.LSTM(
+            embedding_dim, self.hidden_size, direction="bidirectional")
 
     def forward(self, x, input_lens):
         # x.shape = [B, C, T]
@@ -83,12 +84,18 @@ class Encoder(dg.Layer):
             x = self.dropout(layers.relu(batchnorm(conv(x))))  #(B, C, T)
 
         x = layers.transpose(x, [0, 2, 1])  # (B, T, C)
+        batch_size = x.shape[0]
 
-        lstm_forward = self.lstm_forward(x)
-        lstm_reverse = self.lstm_reverse(x, input_lens)
+        pre_hidden = layers.zeros(
+            shape=[2, batch_size, self.hidden_size], dtype=x.dtype)
+        pre_cell = layers.zeros(
+            shape=[2, batch_size, self.hidden_size], dtype=x.dtype)
 
-        output = layers.concat(
-            input=[lstm_forward, lstm_reverse], axis=-1)  #(B, T, C)
+        output, _ = self.lstm(
+            inputs=x,
+            initial_states=(pre_hidden, pre_cell),
+            sequence_length=input_lens)
+
         mask = layers.unsqueeze(
             layers.sequence_mask(
                 input_lens, maxlen=output.shape[1]),

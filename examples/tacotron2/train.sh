@@ -6,7 +6,6 @@ python -u train.py \
 --data='../../dataset/LJSpeech-1.1' \
 --output='./experiment' \
 --config='configs/ljspeech.yaml' \
-#--checkpoint='./checkpoint/transformer/step-120000' \
 
 if [ $? -ne 0 ]; then
     echo "Failed in training!"

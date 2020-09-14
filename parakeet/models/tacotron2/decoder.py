@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import paddle
 import paddle.fluid.dygraph as dg
 import paddle.fluid as fluid
 import paddle.fluid.layers as layers
@@ -41,10 +42,12 @@ class Decoder(dg.Layer):
             dropout_rate=0.5,
             bias=False)
 
-        self.attention_rnn = dg.LSTMCell(
+        self.attention_rnn = paddle.nn.LSTMCell(
+            prenet_dim + encoder_embedding_dim, attention_rnn_dim)
+        '''self.attention_rnn = dg.LSTMCell(
             attention_rnn_dim,
             prenet_dim + encoder_embedding_dim,
-            dtype='float32')
+            dtype='float32')'''
         self.dropout1 = dg.Dropout(
             p=self.p_attention_dropout,
             dropout_implementation='upscale_in_train')
@@ -52,11 +55,12 @@ class Decoder(dg.Layer):
         self.attention_layer = LocationSensitiveAttention(
             attention_rnn_dim, encoder_embedding_dim, attention_dim,
             attention_location_n_filters, attention_location_kernel_size)
-
-        self.decoder_rnn = dg.LSTMCell(
+        '''self.decoder_rnn = dg.LSTMCell(
             decoder_rnn_dim,
             attention_rnn_dim + encoder_embedding_dim,
-            dtype='float32')
+            dtype='float32')'''
+        self.decoder_rnn = paddle.nn.LSTMCell(
+            attention_rnn_dim + encoder_embedding_dim, decoder_rnn_dim)
         self.dropout2 = dg.Dropout(
             p=self.p_decoder_dropout,
             dropout_implementation='upscale_in_train')
@@ -93,9 +97,9 @@ class Decoder(dg.Layer):
         # decoder_input.shape=[B, C]
         cell_input = layers.concat(
             [decoder_input, self.attention_context], axis=-1)  #[B, C]
-        self.attention_hidden, self.attention_cell = self.attention_rnn(
-            cell_input, self.attention_hidden,
-            self.attention_cell)  #[B, C], [B, C]
+        self.attention_hidden, (_, self.attention_cell) = self.attention_rnn(
+            cell_input, (self.attention_hidden,
+                         self.attention_cell))  #[B, C], [B, C]
         self.attention_hidden = self.dropout1(self.attention_hidden)  #[B, C]
 
         attention_weights_cat = layers.concat(
@@ -113,9 +117,9 @@ class Decoder(dg.Layer):
         self.attention_weights_cum += self.attention_weights  #[B, T]
         decoder_input = layers.concat(
             [self.attention_hidden, self.attention_context], axis=-1)  #[B, 2C]
-        self.decoder_hidden, self.decoder_cell = self.decoder_rnn(
-            decoder_input, self.decoder_hidden,
-            self.decoder_cell)  #[B, C] [B, C]
+        self.decoder_hidden, (_, self.decoder_cell) = self.decoder_rnn(
+            decoder_input, (self.decoder_hidden,
+                            self.decoder_cell))  #[B, C] [B, C]
         self.decoder_hidden = self.dropout2(self.decoder_hidden)  #[B, C]
 
         decoder_hidden_attention_context = layers.concat(

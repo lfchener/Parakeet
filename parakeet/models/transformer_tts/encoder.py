@@ -82,6 +82,7 @@ class Encoder(dg.Layer):
         x = self.encoder_prenet(x)
 
         if fluid.framework._dygraph_tracer()._train_mode:
+
             mask = get_attn_key_pad_mask(positional, self.num_head, x.dtype)
             query_mask = get_non_pad_mask(positional, self.num_head, x.dtype)
 

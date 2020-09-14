@@ -115,7 +115,7 @@ def main(args):
         cfg['train']['batch_size'],
         nranks,
         local_rank,
-        shuffle=True).reader
+        shuffle=False).reader
     iterator = iter(tqdm(reader))
 
     while global_step <= cfg['train']['max_iteration']:
