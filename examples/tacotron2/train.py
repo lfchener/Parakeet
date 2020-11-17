@@ -27,10 +27,8 @@ from matplotlib import cm
 import matplotlib.pyplot as plt
 from collections import OrderedDict
 from tensorboardX import SummaryWriter
-import paddle.fluid.dygraph as dg
-import paddle.fluid.layers as layers
-import paddle.fluid as fluid
 import paddle
+import paddle.distributed as dist
 from parakeet.models.tacotron2.tacotron2 import Tacotron2
 from data import LJSpeechLoader
 from parakeet.utils import io
@@ -56,16 +54,15 @@ def add_config_options_to_parser(parser):
 
 
 def main(args):
-    local_rank = dg.parallel.Env().local_rank
-    nranks = dg.parallel.Env().nranks
+    local_rank = dist.get_rank()
+    nranks = dist.get_world_size()
     parallel = nranks > 1
 
     with open(args.config) as f:
         cfg = yaml.load(f, Loader=yaml.Loader)
 
     global_step = 0
-    place = 'gpu:{}'.format(dg.parallel.Env()
-                           .dev_id) if args.use_gpu else 'cpu'
+    place = 'gpu:{}'.format(local_rank) if args.use_gpu else 'cpu'
     paddle.set_device(place)
 
     if not os.path.exists(args.output):
@@ -105,8 +102,7 @@ def main(args):
     print("Rank {}: checkpoint loaded.".format(local_rank))
 
     if parallel:
-        strategy = dg.parallel.prepare_context()
-        model = fluid.dygraph.parallel.DataParallel(model, strategy)
+        model = paddle.DataParallel(model)
 
     loader = LJSpeechLoader(
         cfg['audio'],
@@ -178,12 +174,7 @@ def main(args):
                 writer.add_figure('stop_token_%d' % global_step, fig,
                                   global_step)
 
-        if parallel:
-            total_loss = model.scale_loss(total_loss)
-            total_loss.backward()
-            model.apply_collective_grads()
-        else:
-            total_loss.backward()
+        total_loss.backward()
         optimizer.minimize(total_loss)
         model.clear_gradients()
         duration = time.perf_counter() - start_time
