@@ -20,6 +20,7 @@ import csv
 import pickle
 
 from paddle import fluid
+from paddle.io import Dataset, DistributedBatchSampler, DataLoader
 from parakeet import g2p
 from parakeet import audio
 from parakeet.data.sampler import *
@@ -40,6 +41,8 @@ class LJSpeechLoader:
                  shuffle=True):
 
         LJSPEECH_ROOT = Path(data_path)
+        dataset = LJSpeechDataset(LJSPEECH_ROOT)
+        '''
         metadata = LJSpeechMetaData(LJSPEECH_ROOT)
         transformer = LJSpeech(
             sr=config['sr'],
@@ -49,48 +52,37 @@ class LJSpeechLoader:
             hop_length=config['hop_length'],
             mel_fmin=config['mel_fmin'],
             mel_fmax=config['mel_fmax'])
-        dataset = TransformDataset(metadata, transformer)
-        dataset = CacheDataset(dataset)
-
-        sampler = DistributedSampler(
-            len(dataset), nranks, rank, shuffle=shuffle)
-
-        assert batch_size % nranks == 0
-        each_bs = batch_size // nranks
-        dataloader = DataCargo(
-            dataset,
-            sampler=sampler,
-            batch_size=each_bs,
-            shuffle=shuffle,
-            batch_fn=batch_examples,
-            drop_last=True)
-        self.reader = fluid.io.DataLoader.from_generator(
-            capacity=32,
-            iterable=True,
-            use_double_buffer=True,
-            return_list=True)
-        self.reader.set_batch_generator(dataloader, place)
+        dataset = TransformDataset(metadata, transformer)'''
+        
+        sampler = DistributedBatchSampler(dataset,
+                                        batch_size = batch_size,
+                                        shuffle = shuffle,
+                                        drop_last = True)
+        
+        self.dataloader = DataLoader(dataset,
+                                places=place,
+                                batch_sampler = sampler,
+                                collate_fn = batch_examples,
+                                num_workers = 4)
 
 
-class LJSpeechMetaData(DatasetMixin):
+class LJSpeechDataset(Dataset):
     def __init__(self, root):
         self.root = Path(root)
-        self._wav_dir = self.root.joinpath("wavs")
-        csv_path = self.root.joinpath("metadata.csv")
-        self._table = pd.read_csv(
-            csv_path,
-            sep="|",
-            header=None,
-            quoting=csv.QUOTE_NONE,
-            names=["fname", "raw_text", "normalized_text"])
+        self.data_dir = self.root.joinpath("prepared_data")
+        chars_path = self.data_dir.joinpath("characters.pkl")
+        with open(chars_path, 'rb') as f:
+            self.chars_dict = list(pickle.load(f).items())
 
-    def get_example(self, i):
-        fname, raw_text, normalized_text = self._table.iloc[i]
-        fname = str(self._wav_dir.joinpath(fname + ".wav"))
-        return fname, normalized_text
+    def __getitem__(self, idx):
+        fname, character = self.chars_dict[idx]
+        fname = str(self.data_dir.joinpath(fname + ".npy"))
+        mel = np.load(fname)
+
+        return mel, character
 
     def __len__(self):
-        return len(self._table)
+        return len(self.chars_dict)
 
 
 class LJSpeech(object):
@@ -137,7 +129,6 @@ class LJSpeech(object):
         character = np.array(
             g2p.en.text_to_sequence(normalized_text), dtype=np.int64)
         return (mel, character)
-
 
 def batch_examples(batch):
     texts = []

@@ -13,16 +13,16 @@
 # limitations under the License.
 
 from math import sqrt
-import paddle.fluid.dygraph as dg
-import paddle.fluid as fluid
-import paddle.fluid.layers as layers
 from parakeet.models.tacotron2.encoder import Encoder
 from parakeet.models.tacotron2.decoder import Decoder
 from parakeet.models.transformer_tts.post_convnet import PostConvNet
 from parakeet.g2p.text.symbols import symbols
+import paddle
+from paddle import nn
+import time
 
 
-class Tacotron2(dg.Layer):
+class Tacotron2(nn.Layer):
     def __init__(self,
                  n_mels=80,
                  n_frames_per_step=1,
@@ -47,13 +47,14 @@ class Tacotron2(dg.Layer):
         self.n_symbols = len(symbols) + 1
         std = sqrt(2.0 / (self.n_symbols + symbols_embedding_dim))
         val = sqrt(3.0) * std  # uniform bounds for std
-        self.embedding = dg.Embedding(
-            [self.n_symbols, symbols_embedding_dim],
-            padding_idx=0,
-            param_attr=fluid.ParamAttr(
-                initializer=fluid.initializer.UniformInitializer(
-                    low=-val, high=val),
-                trainable=False))
+        self.embedding = nn.Embedding(
+            #self.n_symbols, symbols_embedding_dim,
+            148, symbols_embedding_dim,
+            #padding_idx=0,
+            weight_attr=paddle.ParamAttr(
+                initializer=nn.initializer.Uniform(
+                    low=-val, high=val)))
+                #trainable=False))
         self.encoder = Encoder(encoder_n_convs, encoder_embedding_dim,
                                encoder_kernel_size)
         self.decoder = Decoder(
@@ -68,34 +69,34 @@ class Tacotron2(dg.Layer):
             padding=int((postnet_kernel_size - 1) / 2),
             num_conv=postnet_n_convs,
             outputs_per_step=1,
-            dropout=0.5,
+            dropout=0.0, #0.5
             batchnorm_last=True)
 
-    def forward(self, text_inputs, text_lens, mels, output_lens):
-        embedded_inputs = fluid.layers.transpose(
-            self.embedding(text_inputs), [0, 2, 1])  #(B, C, T)
+    def forward(self, text_inputs, text_lens, mels, output_lens):        
+        embedded_inputs = self.embedding(text_inputs)  #(B, T, C)
         encoder_outputs = self.encoder(embedded_inputs, text_lens)  #(B, T, C)
-
+        
+        #import pdb; pdb.set_trace()
         mel_outputs, gate_outputs, alignments = self.decoder(
             encoder_outputs, mels,
             memory_lens=text_lens)  #[B, T, C], [B, T], [B, T]
 
         mel_outputs_postnet = self.postnet(mel_outputs)  #[B, T, C]
-        mel_outputs_postnet = mel_outputs + mel_outputs_postnet  #[B, T, C]
+        mel_outputs_postnet = mel_outputs + mel_outputs_postnet  #[B, T, C] 
 
         if output_lens is not None:
-            mask = layers.unsqueeze(
-                layers.sequence_mask(x=output_lens), [-1])  #[B, T, 1]
+            mask = paddle.tensor.unsqueeze(
+                paddle.fluid.layers.sequence_mask(x=output_lens), [-1])  #[B, T, 1]
             mel_outputs = mel_outputs * mask  #[B, T, C]
             mel_outputs_postnet = mel_outputs_postnet * mask  #[B, T, C]
-            gate_outputs = gate_outputs * mask[:, 0, :] + (1 - mask[:, 0, :]
+            gate_outputs = gate_outputs * mask[:, :, 0] + (1 - mask[:, :, 0]
                                                            ) * 1e3  #[B, T]
-            gate_outputs = fluid.layers.sigmoid(gate_outputs)
+            gate_outputs = nn.Sigmoid()(gate_outputs)
 
         return mel_outputs, mel_outputs_postnet, gate_outputs, alignments
 
     def inference(self, inputs):
-        embedded_inputs = layers.transpose(self.embedding(inputs),
+        embedded_inputs = paddle.tensor.transpose(self.embedding(inputs),
                                            [0, 2, 1])  #(B, C, T)
         encoder_outputs = self.encoder.inference(embedded_inputs)
         mel_outputs, gate_outputs, alignments = self.decoder.inference(

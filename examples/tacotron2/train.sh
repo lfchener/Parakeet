@@ -1,10 +1,11 @@
 
 # train model
-export CUDA_VISIBLE_DEVICES=0
+export CUDA_VISIBLE_DEVICES=7
+#nvprof -o tacotron2_timeline -f --cpu-profiling off --profile-from-start off \
 python -u train.py \
 --use_gpu=1 \
 --data='../../dataset/LJSpeech-1.1' \
---output='./experiment' \
+--output='./experiment_test' \
 --config='configs/ljspeech.yaml' \
 
 if [ $? -ne 0 ]; then

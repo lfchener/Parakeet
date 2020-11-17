@@ -13,14 +13,13 @@
 # limitations under the License.
 
 import paddle
-import paddle.fluid.dygraph as dg
-import paddle.fluid as fluid
-import paddle.fluid.layers as layers
+from paddle import nn
+import paddle.nn.functional as F
 from parakeet.models.transformer_tts.prenet import PreNet
 from parakeet.modules.location_sensitive_attention import LocationSensitiveAttention
+import time
 
-
-class Decoder(dg.Layer):
+class Decoder(nn.Layer):
     def __init__(self, n_mels, n_frames_per_step, encoder_embedding_dim,
                  prenet_dim, attention_rnn_dim, decoder_rnn_dim, attention_dim,
                  attention_location_n_filters, attention_location_kernel_size,
@@ -39,91 +38,71 @@ class Decoder(dg.Layer):
             n_mels * n_frames_per_step,
             prenet_dim,
             prenet_dim,
-            dropout_rate=0.5,
+            dropout_rate=0.0, #0.5
             bias=False)
 
-        self.attention_rnn = paddle.nn.LSTMCell(
+        self.attention_rnn = nn.LSTMCell(
             prenet_dim + encoder_embedding_dim, attention_rnn_dim)
-        '''self.attention_rnn = dg.LSTMCell(
-            attention_rnn_dim,
-            prenet_dim + encoder_embedding_dim,
-            dtype='float32')'''
-        self.dropout1 = dg.Dropout(
-            p=self.p_attention_dropout,
-            dropout_implementation='upscale_in_train')
 
         self.attention_layer = LocationSensitiveAttention(
             attention_rnn_dim, encoder_embedding_dim, attention_dim,
             attention_location_n_filters, attention_location_kernel_size)
-        '''self.decoder_rnn = dg.LSTMCell(
-            decoder_rnn_dim,
-            attention_rnn_dim + encoder_embedding_dim,
-            dtype='float32')'''
-        self.decoder_rnn = paddle.nn.LSTMCell(
+        self.decoder_rnn = nn.LSTMCell(
             attention_rnn_dim + encoder_embedding_dim, decoder_rnn_dim)
-        self.dropout2 = dg.Dropout(
-            p=self.p_decoder_dropout,
-            dropout_implementation='upscale_in_train')
-        self.linear_projection = dg.Linear(
+        self.linear_projection = nn.Linear(
             decoder_rnn_dim + encoder_embedding_dim,
             n_mels * n_frames_per_step)
-        self.gate_layer = dg.Linear(decoder_rnn_dim + encoder_embedding_dim, 1)
+        self.gate_layer = nn.Linear(decoder_rnn_dim + encoder_embedding_dim, 1)
 
-    def initialize_decoder_states(self, memory, mask):
+    def initialize_decoder_states(self, memory):
         batch_size = memory.shape[0]
         MAX_TIME = memory.shape[1]
 
-        self.attention_hidden = layers.zeros(
+        self.attention_hidden = paddle.zeros(
             shape=[batch_size, self.attention_rnn_dim], dtype=memory.dtype)
-        self.attention_cell = layers.zeros(
+        self.attention_cell = paddle.zeros(
             shape=[batch_size, self.attention_rnn_dim], dtype=memory.dtype)
 
-        self.decoder_hidden = layers.zeros(
+        self.decoder_hidden = paddle.zeros(
             shape=[batch_size, self.decoder_rnn_dim], dtype=memory.dtype)
-        self.decoder_cell = layers.zeros(
+        self.decoder_cell = paddle.zeros(
             shape=[batch_size, self.decoder_rnn_dim], dtype=memory.dtype)
 
-        self.attention_weights = layers.zeros(
+        self.attention_weights = paddle.zeros(
             shape=[batch_size, MAX_TIME], dtype=memory.dtype)
-        self.attention_weights_cum = layers.zeros(
+        self.attention_weights_cum = paddle.zeros(
             shape=[batch_size, MAX_TIME], dtype=memory.dtype)
-        self.attention_context = layers.zeros(
+        self.attention_context = paddle.zeros(
             shape=[batch_size, self.encoder_embedding_dim], dtype=memory.dtype)
 
         self.memory = memory  #[B, T, C]
-        self.mask = mask  #[B, T]
 
     def decode(self, decoder_input):
         # decoder_input.shape=[B, C]
-        cell_input = layers.concat(
+        cell_input = paddle.concat(
             [decoder_input, self.attention_context], axis=-1)  #[B, C]
-        self.attention_hidden, (_, self.attention_cell) = self.attention_rnn(
+        
+        _, (self.attention_hidden, self.attention_cell) = self.attention_rnn(
             cell_input, (self.attention_hidden,
                          self.attention_cell))  #[B, C], [B, C]
-        self.attention_hidden = self.dropout1(self.attention_hidden)  #[B, C]
-
-        attention_weights_cat = layers.concat(
-            [
-                layers.unsqueeze(
-                    self.attention_weights, axes=[1]), layers.unsqueeze(
-                        self.attention_weights_cum, axes=[1])
-            ],
-            axis=1)  #[B, 2, T]
+        
+        self.attention_hidden = F.dropout(self.attention_hidden, self.p_attention_dropout)  #[B, C]
+        attention_weights_cat = paddle.stack([self.attention_weights, self.attention_weights_cum], axis=1)  #[B, 2, T]
 
         self.attention_context, self.attention_weights = self.attention_layer(
             self.attention_hidden, self.memory, attention_weights_cat,
             self.mask)  #[B, C], [B, T]
 
         self.attention_weights_cum += self.attention_weights  #[B, T]
-        decoder_input = layers.concat(
+        decoder_input = paddle.concat(
             [self.attention_hidden, self.attention_context], axis=-1)  #[B, 2C]
-        self.decoder_hidden, (_, self.decoder_cell) = self.decoder_rnn(
+        a, (self.decoder_hidden, self.decoder_cell) = self.decoder_rnn(
             decoder_input, (self.decoder_hidden,
                             self.decoder_cell))  #[B, C] [B, C]
-        self.decoder_hidden = self.dropout2(self.decoder_hidden)  #[B, C]
+        self.decoder_hidden = F.dropout(self.decoder_hidden, p = self.p_decoder_dropout)  #[B, C]
 
-        decoder_hidden_attention_context = layers.concat(
-            [self.decoder_hidden, self.attention_context], axis=1)  #[B, 2C]
+        decoder_hidden_attention_context = paddle.concat(
+            [self.decoder_hidden, self.attention_context], axis=-1)  #[B, 2C]
         decoder_output = self.linear_projection(
             decoder_hidden_attention_context)  #[B, C]
 
@@ -135,37 +114,37 @@ class Decoder(dg.Layer):
         # memory.shape=[B, T, C], decoder_inputs.shape=[B, T, C]
         batch_size = decoder_inputs.shape[0]
         n_feature = decoder_inputs.shape[-1]
-        decoder_inputs = layers.concat(
-            input=[
-                layers.zeros(
+        decoder_inputs = paddle.concat(
+            [
+                paddle.zeros(
                     shape=[batch_size, 1, n_feature],
                     dtype=decoder_inputs.dtype), decoder_inputs
             ],
             axis=1)
         decoder_inputs = self.prenet(decoder_inputs)  #(B, T, C)
 
-        self.initialize_decoder_states(
-            memory, mask=1 - layers.sequence_mask(x=memory_lens))
+        # mel 频谱每个 time step 的 mask，所以少了 T_mel 维
+        self.mask = paddle.cast(memory[:,:,0:1] == 0, dtype=memory.dtype) #(B, T, 1)
+        self.initialize_decoder_states(memory)
         mel_outputs, gate_outputs, alignments = [], [], []
-        while len(mel_outputs) < decoder_inputs.shape[1] - 1:
+
+        while len(mel_outputs) < decoder_inputs.shape[1] - 1:  # 除去最后一个时间步
             decoder_input = decoder_inputs[:, len(mel_outputs), :]  #[B, C]
             mel_output, gate_output, attention_weights = self.decode(
                 decoder_input)  #[B, C], [B, 1], [B, T]
-            mel_outputs += [mel_output]  #[T, B, C]
-            gate_outputs += [layers.squeeze(gate_output, axes=[1])]  #[T, B]
-            alignments += [attention_weights]  #[B, T]
+            mel_outputs += [mel_output]  # T 个 [B, C]
+            gate_outputs += [gate_output]  #T 个 [B, 1]
+            alignments += [attention_weights]  # T 个 [B, T]
 
-        alignments = layers.stack(alignments, axis=1)  #[B, T, T]
-        gate_outputs = layers.stack(gate_outputs, axis=1)  #[B, T]
-        mel_outputs = layers.stack(mel_outputs, axis=1)  #[B, T, C]
-        mel_outputs = layers.reshape(
-            mel_outputs, shape=[0, -1, self.n_mel_channels])  #[B, T, C]
+        alignments = paddle.stack(alignments, axis=1)  #[B, T, T]
+        gate_outputs = paddle.concat(gate_outputs, axis=1)  #[B, T]
+        mel_outputs = paddle.stack(mel_outputs, axis=1)  #[B, T, C]
 
         return mel_outputs, gate_outputs, alignments
 
     def inference(self, memory, gate_threshold=0.5, max_decoder_steps=1000):
         batch_size = memory.shape[0]
-        decoder_input = layers.zeros(
+        decoder_input = paddle.zeros(
             shape=[batch_size, self.n_mel_channels * self.n_frames_per_step],
             dtype=memory.dtype)  #[B, C]
 
@@ -177,11 +156,11 @@ class Decoder(dg.Layer):
             mel_output, gate_output, alignment = self.decode(decoder_input)
 
             mel_outputs += [mel_output]
-            gate_outputs += [layers.squeeze(
+            gate_outputs += [paddle.squeeze(
                 gate_output, axes=[1])]  #！！！！diff！！！
             alignments += [alignment]
 
-            if layers.sigmoid(gate_output) > gate_threshold:
+            if F.sigmoid(gate_output) > gate_threshold:
                 break
             elif len(mel_outputs) == max_decoder_steps:
                 print("Warning! Reached max decoder steps!!!")
@@ -189,10 +168,10 @@ class Decoder(dg.Layer):
 
             decoder_input = mel_output
 
-        alignments = layers.stack(alignments, axis=1)  #[B, T]
-        gate_outputs = layers.stack(gate_outputs, axis=1)  #[B, T]
-        mel_output = layers.stack(mel_output, axis=1)  #[B, T, C]
-        mel_output = layers.reshape(
+        alignments = paddle.stack(alignments, axis=1)  #[B, T]
+        gate_outputs = paddle.stack(gate_outputs, axis=1)  #[B, T]
+        mel_output = paddle.stack(mel_output, axis=1)  #[B, T, C]
+        mel_output = paddle.reshape(
             mel_output, shape=[0, -1, self.n_mel_channels])  #[B, T, C]
 
         return mel_outputs, gate_outputs, alignments

@@ -19,15 +19,15 @@ network:
   attention_dim: 128
   attention_location_n_filters: 32
   attention_location_kernel_size: 31
-  p_attention_dropout: 0.1
-  p_decoder_dropout: 0.1
+  p_attention_dropout: 0.0 #0.1
+  p_decoder_dropout: 0.0  #0.1
   postnet_embedding_dim: 512
   postnet_kernel_size: 5
   postnet_n_convs: 5
 
 train:
   batch_size: 32
-  learning_rate: 0.001
+  learning_rate: 0.02
   weight_decay: 0.000001
   grad_clip_thresh: 1.0 #the threshold of grad clip.
 

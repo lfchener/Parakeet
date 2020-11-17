@@ -12,18 +12,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import paddle.fluid.dygraph as dg
-import paddle.fluid as fluid
-import paddle.fluid.layers as layers
-from .customized import Conv1D
+import paddle
+from paddle import nn
+import paddle.nn.functional as F
 
 
-class LocationLayer(dg.Layer):
+class LocationLayer(nn.Layer):
     def __init__(self, attention_n_filters, attention_kernel_size,
                  attention_dim):
         super(LocationLayer, self).__init__()
         padding = int((attention_kernel_size - 1) / 2)
-        self.location_conv = Conv1D(
+        self.location_conv = nn.Conv1D(
             2,
             attention_n_filters,
             attention_kernel_size,
@@ -31,29 +30,29 @@ class LocationLayer(dg.Layer):
             padding,
             1,
             bias_attr=False)
-        self.location_dense = dg.Linear(
+        self.location_dense = nn.Linear(
             attention_n_filters, attention_dim, bias_attr=False)
 
     def forward(self, attention_weights_cat):
         # attention_weights_cat.shape=[B, 2, T]
         processed_attention = self.location_conv(
             attention_weights_cat)  #[B, C, T]
-        processed_attention = layers.transpose(processed_attention,
+        processed_attention = paddle.transpose(processed_attention,
                                                [0, 2, 1])  #[B, T, C]
         processed_attention = self.location_dense(
             processed_attention)  #[B, T, C]
         return processed_attention
 
 
-class LocationSensitiveAttention(dg.Layer):
+class LocationSensitiveAttention(nn.Layer):
     def __init__(self, attention_rnn_dim, embedding_dim, attention_dim,
                  attention_location_n_filters, attention_location_kernel_size):
         super(LocationSensitiveAttention, self).__init__()
-        self.query_layer = dg.Linear(
+        self.query_layer = nn.Linear(
             attention_rnn_dim, attention_dim, bias_attr=False)
-        self.memory_layer = dg.Linear(
+        self.memory_layer = nn.Linear(
             embedding_dim, attention_dim, bias_attr=False)
-        self.value = dg.Linear(attention_dim, 1, bias_attr=False)
+        self.value = nn.Linear(attention_dim, 1, bias_attr=False)
         self.location_layer = LocationLayer(attention_location_n_filters,
                                             attention_location_kernel_size,
                                             attention_dim)
@@ -70,25 +69,21 @@ class LocationSensitiveAttention(dg.Layer):
 
         # get alignment energies
         processed_query = self.query_layer(
-            layers.unsqueeze(
-                attention_hidden_state, axes=[1]))  #[B, 1, C]
+                paddle.unsqueeze(attention_hidden_state, axis=[1]))  #[B, 1, C]
         processed_attention_weights = self.location_layer(
             attention_weights_cat)  #[B, T, C]
-        processed_memory = self.memory_layer(memory)
+        processed_memory = self.memory_layer(memory) #(B, T, C)
         energies = self.value(
-            layers.tanh(processed_query + processed_attention_weights +
+            paddle.tanh(processed_query + processed_attention_weights +
                         processed_memory))  #[B, T, 1]
 
-        alignment = layers.squeeze(energies, axes=[-1])  # [B, T]
-
         if mask is not None:
-            alignment = alignment + mask * -1e30  # [B, T]
+            alignment = energies + mask * -1e30  # [B, T, 1]
 
-        attention_weights = layers.softmax(alignment)  #[B, T]
-        attention_context = layers.matmul(
-            layers.unsqueeze(
-                attention_weights, axes=[1]), memory)  #[B, 1, C]
-        attention_context = layers.squeeze(
-            attention_context, axes=[1])  # [B, C]
+        attention_weights = F.softmax(alignment, axis=1)  #[B, T, 1]
+        attention_context = paddle.matmul(
+                attention_weights, memory, transpose_x=True)  #[B, 1, C]
+        attention_weights = paddle.squeeze(attention_weights, axis=[-1]) #[B, C]
+        attention_context = paddle.squeeze(attention_context, axis=[1]) #[B, C]
 
         return attention_context, attention_weights

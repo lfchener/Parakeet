@@ -13,12 +13,11 @@
 # limitations under the License.
 
 import math
-import paddle.fluid.dygraph as dg
-import paddle.fluid as fluid
-import paddle.fluid.layers as layers
+import paddle
+from paddle import nn
+import paddle.nn.functional as F
 
-
-class PreNet(dg.Layer):
+class PreNet(nn.Layer):
     def __init__(self,
                  input_size,
                  hidden_size,
@@ -41,28 +40,28 @@ class PreNet(dg.Layer):
 
         if bias:
             k = math.sqrt(1.0 / input_size)
-            bias_attr = fluid.ParamAttr(initializer=fluid.initializer.Uniform(
+            bias_attr = paddle.ParamAttr(initializer=nn.initializer.Uniform(
                 low=-k, high=k))
         else:
             bias_attr = False
-        self.linear1 = dg.Linear(
+        self.linear1 = nn.Linear(
             input_size,
             hidden_size,
-            param_attr=fluid.ParamAttr(
-                initializer=fluid.initializer.XavierInitializer()),
+            weight_attr=paddle.ParamAttr(
+                initializer=nn.initializer.XavierUniform()),
             bias_attr=bias_attr)
         if bias:
             k = math.sqrt(1.0 / hidden_size)
-            bias_attr = fluid.ParamAttr(initializer=fluid.initializer.Uniform(
+            bias_attr = paddle.ParamAttr(initializer=nn.initializer.Uniform(
                 low=-k, high=k))
         else:
             bias_attr = False
 
-        self.linear2 = dg.Linear(
+        self.linear2 = nn.Linear(
             hidden_size,
             output_size,
-            param_attr=fluid.ParamAttr(
-                initializer=fluid.initializer.XavierInitializer()),
+            weight_attr=paddle.ParamAttr(
+                initializer=nn.initializer.XavierUniform()),
             bias_attr=bias_attr)
 
     def forward(self, x):
@@ -75,12 +74,10 @@ class PreNet(dg.Layer):
         Returns:
             output (Variable): shape(B, T, C), the result after pernet.
         """
-        x = layers.dropout(
-            layers.relu(self.linear1(x)),
-            self.dropout_rate,
-            dropout_implementation='upscale_in_train')
-        output = layers.dropout(
-            layers.relu(self.linear2(x)),
-            self.dropout_rate,
-            dropout_implementation='upscale_in_train')
+        x = F.dropout(
+            F.relu(self.linear1(x)),
+            self.dropout_rate)
+        output = F.dropout(
+            F.relu(self.linear2(x)),
+            self.dropout_rate)
         return output
