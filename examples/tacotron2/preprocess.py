@@ -114,8 +114,8 @@ def prepare_dataset(config, data_path):
     pbar = tqdm(dataset)
     for d in pbar:
         mel, character, fname = d
-        np.save(data_dir.joinpath(fname[:-4]), mel)
-        chars_dict[fname[:-4]] = character
+        np.save(data_dir.joinpath(fname), mel)
+        chars_dict[fname] = character
     with open(data_dir.joinpath('characters.pkl'), 'wb') as f:
         pickle.dump(chars_dict, f)
 

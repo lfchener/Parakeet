@@ -17,6 +17,7 @@ import time
 
 import ruamel.yaml
 import numpy as np
+import paddle
 import paddle.fluid.dygraph as dg
 from paddle.fluid.framework import convert_np_dtype_to_dtype_ as convert_np_dtype
 
@@ -122,7 +123,8 @@ def load_parameters(model,
         )
 
     local_rank = dg.parallel.Env().local_rank
-    model_dict, optimizer_dict = dg.load_dygraph(checkpoint_path)
+    model_dict = paddle.load(checkpoint_path+".pdparams")
+    optimizer_dict = paddle.load(checkpoint_path+".pdopt")
 
     state_dict = model.state_dict()
 
@@ -132,13 +134,13 @@ def load_parameters(model,
                 k].dtype:
             model_dict[k] = v.astype(state_dict[k].numpy().dtype)
 
-    model.set_dict(model_dict)
+    model.set_state_dict(model_dict)
 
     print("[checkpoint] Rank {}: loaded model from {}.pdparams".format(
         local_rank, checkpoint_path))
 
     if optimizer and optimizer_dict:
-        optimizer.set_dict(optimizer_dict)
+        optimizer.set_state_dict(optimizer_dict)
         print("[checkpoint] Rank {}: loaded optimizer state from {}.pdopt".
               format(local_rank, checkpoint_path))
 
@@ -160,12 +162,12 @@ def save_parameters(checkpoint_dir, iteration, model, optimizer=None):
     """
     checkpoint_path = os.path.join(checkpoint_dir, "step-{}".format(iteration))
     model_dict = model.state_dict()
-    dg.save_dygraph(model_dict, checkpoint_path)
+    paddle.save(model_dict, checkpoint_path+".pdparams")
     print("[checkpoint] Saved model to {}.pdparams".format(checkpoint_path))
 
     if optimizer:
         opt_dict = optimizer.state_dict()
-        dg.save_dygraph(opt_dict, checkpoint_path)
+        paddle.save(opt_dict, checkpoint_path+".pdopt")
         print("[checkpoint] Saved optimzier state to {}.pdopt".format(
             checkpoint_path))
 

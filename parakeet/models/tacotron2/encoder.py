@@ -79,9 +79,8 @@ class Encoder(nn.Layer):
         # x.shape = [B, T, C]
 
         for conv, batchnorm in zip(self.convolutions, self.batchnorms):
-            x = F.dropout(F.relu(batchnorm(conv(x))), 0.0)  #(B, T, C)  0.5
+            x = F.dropout(F.relu(batchnorm(conv(x))), 0.5)  #(B, T, C)
 
-        #x = paddle.transpose(x, [0, 2, 1])  # (B, T, C)
         batch_size = x.shape[0]
 
         pre_hidden = paddle.zeros(

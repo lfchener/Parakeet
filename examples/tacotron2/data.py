@@ -42,17 +42,6 @@ class LJSpeechLoader:
 
         LJSPEECH_ROOT = Path(data_path)
         dataset = LJSpeechDataset(LJSPEECH_ROOT)
-        '''
-        metadata = LJSpeechMetaData(LJSPEECH_ROOT)
-        transformer = LJSpeech(
-            sr=config['sr'],
-            n_fft=config['n_fft'],
-            num_mels=config['num_mels'],
-            win_length=config['win_length'],
-            hop_length=config['hop_length'],
-            mel_fmin=config['mel_fmin'],
-            mel_fmax=config['mel_fmax'])
-        dataset = TransformDataset(metadata, transformer)'''
         
         sampler = DistributedBatchSampler(dataset,
                                         batch_size = batch_size,
@@ -63,7 +52,8 @@ class LJSpeechLoader:
                                 places=place,
                                 batch_sampler = sampler,
                                 collate_fn = batch_examples,
-                                num_workers = 4)
+                                num_workers = 0,
+                                use_shared_memory = True)
 
 
 class LJSpeechDataset(Dataset):

@@ -38,7 +38,7 @@ class Decoder(nn.Layer):
             n_mels * n_frames_per_step,
             prenet_dim,
             prenet_dim,
-            dropout_rate=0.0, #0.5
+            dropout_rate=0.5,
             bias=False)
 
         self.attention_rnn = nn.LSTMCell(
@@ -96,7 +96,7 @@ class Decoder(nn.Layer):
         self.attention_weights_cum += self.attention_weights  #[B, T]
         decoder_input = paddle.concat(
             [self.attention_hidden, self.attention_context], axis=-1)  #[B, 2C]
-        a, (self.decoder_hidden, self.decoder_cell) = self.decoder_rnn(
+        _, (self.decoder_hidden, self.decoder_cell) = self.decoder_rnn(
             decoder_input, (self.decoder_hidden,
                             self.decoder_cell))  #[B, C] [B, C]
         self.decoder_hidden = F.dropout(self.decoder_hidden, p = self.p_decoder_dropout)  #[B, C]

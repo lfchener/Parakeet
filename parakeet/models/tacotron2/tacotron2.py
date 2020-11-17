@@ -48,8 +48,7 @@ class Tacotron2(nn.Layer):
         std = sqrt(2.0 / (self.n_symbols + symbols_embedding_dim))
         val = sqrt(3.0) * std  # uniform bounds for std
         self.embedding = nn.Embedding(
-            #self.n_symbols, symbols_embedding_dim,
-            148, symbols_embedding_dim,
+            self.n_symbols, symbols_embedding_dim,
             #padding_idx=0,
             weight_attr=paddle.ParamAttr(
                 initializer=nn.initializer.Uniform(
@@ -69,14 +68,13 @@ class Tacotron2(nn.Layer):
             padding=int((postnet_kernel_size - 1) / 2),
             num_conv=postnet_n_convs,
             outputs_per_step=1,
-            dropout=0.0, #0.5
+            dropout=0.5,
             batchnorm_last=True)
 
     def forward(self, text_inputs, text_lens, mels, output_lens):        
         embedded_inputs = self.embedding(text_inputs)  #(B, T, C)
         encoder_outputs = self.encoder(embedded_inputs, text_lens)  #(B, T, C)
         
-        #import pdb; pdb.set_trace()
         mel_outputs, gate_outputs, alignments = self.decoder(
             encoder_outputs, mels,
             memory_lens=text_lens)  #[B, T, C], [B, T], [B, T]

@@ -36,7 +36,6 @@ from data import LJSpeechLoader
 from parakeet.utils import io
 import time
 
-
 def add_config_options_to_parser(parser):
     parser.add_argument("--config", type=str, help="path of the config file")
     parser.add_argument("--use_gpu", type=int, default=0, help="device to use")
@@ -73,7 +72,7 @@ def main(args):
         os.mkdir(args.output)
 
     writer = SummaryWriter(os.path.join(args.output,
-                                        'log/paddle')) if local_rank == 0 else None
+                                        'log')) if local_rank == 0 else None
 
     cfg_net = cfg['network']
     model = Tacotron2(
@@ -88,11 +87,6 @@ def main(args):
         cfg_net['postnet_embedding_dim'], cfg_net['postnet_kernel_size'],
         cfg_net['postnet_n_convs'])
     learning_rate = cfg['train']['learning_rate']
-    '''optimizer = paddle.optimizer.SGD(learning_rate=learning_rate, 
-        parameters=model.parameters(), 
-        weight_decay=paddle.regularizer.L2Decay(cfg['train']['weight_decay']), 
-        grad_clip=paddle.nn.ClipGradByGlobalNorm(cfg['train'][
-            'grad_clip_thresh']))'''
     optimizer = paddle.optimizer.Adam(
         learning_rate=learning_rate,
         parameters=model.parameters(),
@@ -102,22 +96,19 @@ def main(args):
 
     model.train()
     # Load parameters.
-    '''
     global_step = io.load_parameters(
         model=model,
         optimizer=optimizer,
         checkpoint_dir=os.path.join(args.output, 'checkpoints'),
         iteration=args.iteration,
         checkpoint_path=args.checkpoint)
-    print("Rank {}: checkpoint loaded.".format(local_rank))'''
-    model_dict= paddle.load("./experiment/checkpoints/paddle_param.pdparams")
-    model.set_dict(model_dict)
+    print("Rank {}: checkpoint loaded.".format(local_rank))
 
     if parallel:
         strategy = dg.parallel.prepare_context()
         model = fluid.dygraph.parallel.DataParallel(model, strategy)
 
-    reader = LJSpeechLoader(
+    loader = LJSpeechLoader(
         cfg['audio'],
         None,
         args.data,
@@ -125,26 +116,15 @@ def main(args):
         nranks,
         local_rank,
         shuffle=False).dataloader
-    iterator = iter(tqdm(reader()))
-
-    #####################################################
-    import pickle
-    with open("/paddle/tacotron2/input_batch.pkl", 'rb') as f:
-        data_dict = pickle.load(f)
-        texts = paddle.to_tensor(data_dict['texts'])
-        text_lens = paddle.to_tensor(data_dict['text_lens'])
-        mels = paddle.transpose(paddle.to_tensor(data_dict['mels']), perm=[0,2,1])
-        stop_tokens = paddle.to_tensor(data_dict['stop_token'])
-        output_lens = paddle.to_tensor(data_dict['output_lens'])
-    #####################################################
+    iterator = iter(tqdm(loader))
     
     while global_step <= cfg['train']['max_iteration']:
-        '''try:
+        try:
             batch = next(iterator)
         except StopIteration as e:
-            iterator = iter(tqdm(reader))
+            iterator = iter(tqdm(loader))
             batch = next(iterator)
-        (texts, mels, text_lens, output_lens, stop_tokens) = batch'''
+        (texts, mels, text_lens, output_lens, stop_tokens) = batch
     
         start_time = time.perf_counter()
 
@@ -156,14 +136,6 @@ def main(args):
         post_mel_loss = paddle.nn.MSELoss()(mel_outputs_postnet, mels)
         gate_loss = paddle.nn.BCELoss()(gate_outputs, stop_tokens)
         total_loss = mel_loss + post_mel_loss + gate_loss
-
-        '''model_dict = model.state_dict()
-        num=0
-        for key in model_dict.keys():
-            num += 1
-            print('{}.{}: shape:{}'.format(num, key, model_dict[key].shape))
-        print('total params:', num)
-        exit()'''
 
         if local_rank == 0:
             writer.add_scalar('mel_loss', mel_loss.numpy(), global_step)

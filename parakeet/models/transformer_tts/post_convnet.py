@@ -58,7 +58,8 @@ class PostConvNet(nn.Layer):
                     initializer=nn.initializer.XavierUniform()),
                 bias_attr=paddle.ParamAttr(
                     initializer=nn.initializer.Uniform(
-                        low=-k, high=k))))
+                        low=-k, high=k)),
+                data_format='NLC'))
 
         k = math.sqrt(1.0 / num_hidden)
         for _ in range(1, num_conv - 1):
@@ -72,7 +73,8 @@ class PostConvNet(nn.Layer):
                         initializer=nn.initializer.XavierUniform()),
                     bias_attr=paddle.ParamAttr(
                         initializer=nn.initializer.Uniform(
-                            low=-k, high=k))))
+                            low=-k, high=k)),
+                    data_format='NLC'))
 
         self.conv_list.append(
             nn.Conv1D(
@@ -84,19 +86,20 @@ class PostConvNet(nn.Layer):
                     initializer=nn.initializer.XavierUniform()),
                 bias_attr=paddle.ParamAttr(
                     initializer=nn.initializer.Uniform(
-                        low=-k, high=k))))
+                        low=-k, high=k)),
+                data_format='NLC'))
 
         for i, layer in enumerate(self.conv_list):
             self.add_sublayer("conv_list_{}".format(i), layer)
 
         self.batch_norm_list = [
-            nn.BatchNorm(
-                num_hidden, data_layout='NCHW') for _ in range(num_conv - 1)
+            nn.BatchNorm1D(
+                num_hidden, data_format='NLC') for _ in range(num_conv - 1)
         ]
         if self.batchnorm_last:
             self.batch_norm_list.append(
-                nn.BatchNorm(
-                    n_mels * outputs_per_step, data_layout='NCHW'))
+                nn.BatchNorm1D(
+                    n_mels * outputs_per_step, data_format='NLC'))
         for i, layer in enumerate(self.batch_norm_list):
             self.add_sublayer("batch_norm_list_{}".format(i), layer)
 
@@ -110,9 +113,7 @@ class PostConvNet(nn.Layer):
         Returns:
            output (Variable): shape(B, T, C), the result after postconvnet.
         """
-
-        input = paddle.transpose(input, [0, 2, 1])
-        len = input.shape[-1]
+        len = input.shape[1]
         for i in range(self.num_conv - 1):
             batch_norm = self.batch_norm_list[i]
             conv = self.conv_list[i]
@@ -127,5 +128,4 @@ class PostConvNet(nn.Layer):
             input = F.dropout(
                 batch_norm(input),
                 self.dropout)
-        output = paddle.transpose(input, [0, 2, 1])
-        return output
+        return input
