@@ -111,7 +111,7 @@ def main(args):
         cfg['train']['batch_size'],
         nranks,
         local_rank,
-        shuffle=False).dataloader
+        shuffle=True).dataloader
     iterator = iter(tqdm(loader))
     
     while global_step <= cfg['train']['max_iteration']:
