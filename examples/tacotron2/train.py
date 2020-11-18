@@ -146,7 +146,7 @@ def main(args):
             for name, param in model.state_dict().items():
                 if param.trainable:
                     grad = param.gradient()
-                    writer.add_scalar(name, np.linalg.norm(grad)/(grad.size), global_step)
+                    writer.add_scalar("param.grad/"+name, np.linalg.norm(grad)/(grad.size), global_step)
 
             if global_step % cfg['train']['image_interval'] == 1:
                 idx = np.random.randint(0, alignments.shape[0] - 1)

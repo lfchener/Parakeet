@@ -78,7 +78,7 @@ class LocationSensitiveAttention(nn.Layer):
                         processed_memory))  #[B, T, 1]
 
         if mask is not None:
-            alignment = energies + mask * -1e30  # [B, T, 1]
+            alignment = energies + mask * -1e9  # [B, T, 1]
 
         attention_weights = F.softmax(alignment, axis=1)  #[B, T, 1]
         attention_context = paddle.matmul(
