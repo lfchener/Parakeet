@@ -133,6 +133,8 @@ def main(args):
         gate_loss = paddle.nn.BCELoss()(gate_outputs, stop_tokens)
         total_loss = mel_loss + post_mel_loss + gate_loss
 
+        total_loss.backward()
+
         if local_rank == 0:
             writer.add_scalar('mel_loss', mel_loss.numpy(), global_step)
             writer.add_scalar('post_mel_loss', post_mel_loss.numpy(), global_step)
@@ -141,6 +143,11 @@ def main(args):
             writer.add_scalar('gate_loss', gate_loss.numpy(), global_step)
             writer.add_scalar('learning_rate', optimizer._learning_rate,
                               global_step)
+            for name, param in model.state_dict().items():
+                if param.trainable:
+                    grad = param.gradient()
+                    writer.add_scalar(name, np.linalg.norm(grad)/(grad.size), global_step)
+
             if global_step % cfg['train']['image_interval'] == 1:
                 idx = np.random.randint(0, alignments.shape[0] - 1)
                 x = np.uint8(cm.viridis(alignments[idx].numpy()) * 255)
@@ -174,7 +181,6 @@ def main(args):
                 writer.add_figure('stop_token_%d' % global_step, fig,
                                   global_step)
 
-        total_loss.backward()
         optimizer.minimize(total_loss)
         model.clear_gradients()
         duration = time.perf_counter() - start_time
