@@ -87,7 +87,7 @@ class Decoder(nn.Layer):
                          self.attention_cell))  #[B, C], [B, C]
         
         self.attention_hidden = F.dropout(self.attention_hidden, self.p_attention_dropout)  #[B, C]
-        attention_weights_cat = paddle.stack([self.attention_weights, self.attention_weights_cum], axis=1)  #[B, 2, T]
+        attention_weights_cat = paddle.stack([self.attention_weights, self.attention_weights_cum], axis=-1)  #[B, T, 2]
 
         self.attention_context, self.attention_weights = self.attention_layer(
             self.attention_hidden, self.memory, attention_weights_cat,
