@@ -84,12 +84,13 @@ def main(args):
         cfg_net['postnet_embedding_dim'], cfg_net['postnet_kernel_size'],
         cfg_net['postnet_n_convs'])
     learning_rate = cfg['train']['learning_rate']
+    grad_clip = paddle.nn.ClipGradByGlobalNorm(cfg['train'][
+            'grad_clip_thresh'])
     optimizer = paddle.optimizer.Adam(
         learning_rate=learning_rate,
         parameters=model.parameters(),
         weight_decay=paddle.regularizer.L2Decay(cfg['train']['weight_decay']),
-        grad_clip=paddle.nn.ClipGradByGlobalNorm(cfg['train'][
-            'grad_clip_thresh']))
+        grad_clip=grad_clip)
 
     model.train()
     # Load parameters.
@@ -134,6 +135,7 @@ def main(args):
         total_loss = mel_loss + post_mel_loss + gate_loss
 
         total_loss.backward()
+        optimizer.minimize(total_loss)
 
         if local_rank == 0:
             writer.add_scalar('mel_loss', mel_loss.numpy(), global_step)
@@ -147,7 +149,8 @@ def main(args):
                 if param.trainable:
                     grad = param.gradient()
                     writer.add_scalar("param.grad/"+name, np.linalg.norm(grad)/(grad.size), global_step)
-
+            writer.add_scalar('grad_norm', grad_clip.global_norm.numpy(),
+                              global_step)
             if global_step % cfg['train']['image_interval'] == 1:
                 idx = np.random.randint(0, alignments.shape[0] - 1)
                 x = np.uint8(cm.viridis(alignments[idx].numpy()) * 255)
@@ -181,11 +184,10 @@ def main(args):
                 writer.add_figure('stop_token_%d' % global_step, fig,
                                   global_step)
 
-        optimizer.minimize(total_loss)
         model.clear_gradients()
         duration = time.perf_counter() - start_time
-        print("iteration:{}, mel_loss:{}, post_mel_loss:{}, gate_loss:{}, {:.2f}s/it".format(
-            global_step, mel_loss.numpy(), post_mel_loss.numpy(), gate_loss.numpy(), duration
+        print("iteration:{}, mel_loss:{}, post_mel_loss:{}, gate_loss:{}, grad_norm:{}, {:.2f}s/it".format(
+            global_step, mel_loss.numpy(), post_mel_loss.numpy(), gate_loss.numpy(), grad_clip.global_norm.numpy(), duration
         ))
 
         # save checkpoint

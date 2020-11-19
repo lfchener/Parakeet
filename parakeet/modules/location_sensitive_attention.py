@@ -29,16 +29,16 @@ class LocationLayer(nn.Layer):
             1,
             padding,
             1,
-            bias_attr=False)
+            bias_attr=False,
+            data_format='NLC')
         self.location_dense = nn.Linear(
             attention_n_filters, attention_dim, bias_attr=False)
 
     def forward(self, attention_weights_cat):
-        # attention_weights_cat.shape=[B, 2, T]
+        # attention_weights_cat.shape=[B, T, 2]
         processed_attention = self.location_conv(
-            attention_weights_cat)  #[B, C, T]
-        processed_attention = paddle.transpose(processed_attention,
-                                               [0, 2, 1])  #[B, T, C]
+            attention_weights_cat)  #[B, T, C]
+        
         processed_attention = self.location_dense(
             processed_attention)  #[B, T, C]
         return processed_attention
@@ -64,7 +64,7 @@ class LocationSensitiveAttention(nn.Layer):
                 mask=None):
         # attention_hidden_state.shape = [B, C]
         # memory.shape = [B, T, C]
-        # attention_weights_cat.shape = [B, 2, T]
+        # attention_weights_cat.shape = [B, T, 2]
         # mask.shape = [B, T]
 
         # get alignment energies
