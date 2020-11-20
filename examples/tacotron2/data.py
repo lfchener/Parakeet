@@ -53,17 +53,16 @@ class LJSpeechLoader:
             mel_fmin=config['mel_fmin'],
             mel_fmax=config['mel_fmax'])
         dataset = TransformDataset(metadata, transformer)'''
-        
-        sampler = DistributedBatchSampler(dataset,
-                                        batch_size = batch_size,
-                                        shuffle = shuffle,
-                                        drop_last = True)
-        
-        self.dataloader = DataLoader(dataset,
-                                places=place,
-                                batch_sampler = sampler,
-                                collate_fn = batch_examples,
-                                num_workers = 4)
+
+        sampler = DistributedBatchSampler(
+            dataset, batch_size=batch_size, shuffle=shuffle, drop_last=True)
+
+        self.dataloader = DataLoader(
+            dataset,
+            places=place,
+            batch_sampler=sampler,
+            collate_fn=batch_examples,
+            num_workers=0)
 
 
 class LJSpeechDataset(Dataset):
@@ -129,6 +128,7 @@ class LJSpeech(object):
         character = np.array(
             g2p.en.text_to_sequence(normalized_text), dtype=np.int64)
         return (mel, character)
+
 
 def batch_examples(batch):
     texts = []
