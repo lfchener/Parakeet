@@ -92,12 +92,12 @@ class PostConvNet(nn.Layer):
 
         self.batch_norm_list = [
             nn.BatchNorm1D(
-                num_hidden, data_layout='NLC') for _ in range(num_conv - 1)
+                num_hidden, data_format='NLC') for _ in range(num_conv - 1)
         ]
         if self.batchnorm_last:
             self.batch_norm_list.append(
                 nn.BatchNorm1D(
-                    n_mels * outputs_per_step, data_layout='NLC'))
+                    n_mels * outputs_per_step, data_format='NLC'))
         for i, layer in enumerate(self.batch_norm_list):
             self.add_sublayer("batch_norm_list_{}".format(i), layer)
 
