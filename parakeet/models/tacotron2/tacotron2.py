@@ -48,12 +48,12 @@ class Tacotron2(nn.Layer):
         std = sqrt(2.0 / (self.n_symbols + symbols_embedding_dim))
         val = sqrt(3.0) * std  # uniform bounds for std
         self.embedding = nn.Embedding(
-            self.n_symbols, symbols_embedding_dim,
+            self.n_symbols,
+            symbols_embedding_dim,
             #padding_idx=0,
-            weight_attr=paddle.ParamAttr(
-                initializer=nn.initializer.Uniform(
-                    low=-val, high=val)))
-                #trainable=False))
+            weight_attr=paddle.ParamAttr(initializer=nn.initializer.Uniform(
+                low=-val, high=val)))
+        #trainable=False))
         self.encoder = Encoder(encoder_n_convs, encoder_embedding_dim,
                                encoder_kernel_size)
         self.decoder = Decoder(
@@ -71,10 +71,10 @@ class Tacotron2(nn.Layer):
             dropout=0.5,
             batchnorm_last=True)
 
-    def forward(self, text_inputs, text_lens, mels, output_lens):        
+    def forward(self, text_inputs, text_lens, mels, output_lens):
         embedded_inputs = self.embedding(text_inputs)  #(B, T, C)
         encoder_outputs = self.encoder(embedded_inputs, text_lens)  #(B, T, C)
-        
+
         mel_outputs, gate_outputs, alignments = self.decoder(
             encoder_outputs, mels,
             memory_lens=text_lens)  #[B, T, C], [B, T], [B, T]
@@ -84,18 +84,18 @@ class Tacotron2(nn.Layer):
 
         if output_lens is not None:
             mask = paddle.tensor.unsqueeze(
-                paddle.fluid.layers.sequence_mask(x=output_lens), [-1])  #[B, T, 1]
+                paddle.fluid.layers.sequence_mask(x=output_lens),
+                [-1])  #[B, T, 1]
             mel_outputs = mel_outputs * mask  #[B, T, C]
             mel_outputs_postnet = mel_outputs_postnet * mask  #[B, T, C]
             gate_outputs = gate_outputs * mask[:, :, 0] + (1 - mask[:, :, 0]
                                                            ) * 1e3  #[B, T]
-            gate_outputs = nn.Sigmoid()(gate_outputs)
 
         return mel_outputs, mel_outputs_postnet, gate_outputs, alignments
 
     def inference(self, inputs):
-        embedded_inputs = paddle.tensor.transpose(self.embedding(inputs),
-                                           [0, 2, 1])  #(B, C, T)
+        embedded_inputs = paddle.tensor.transpose(
+            self.embedding(inputs), [0, 2, 1])  #(B, C, T)
         encoder_outputs = self.encoder.inference(embedded_inputs)
         mel_outputs, gate_outputs, alignments = self.decoder.inference(
             encoder_outputs)  #[B, T, C]

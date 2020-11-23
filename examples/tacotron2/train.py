@@ -34,6 +34,7 @@ from data import LJSpeechLoader
 from parakeet.utils import io
 import time
 
+
 def add_config_options_to_parser(parser):
     parser.add_argument("--config", type=str, help="path of the config file")
     parser.add_argument("--use_gpu", type=int, default=0, help="device to use")
@@ -85,7 +86,7 @@ def main(args):
         cfg_net['postnet_n_convs'])
     learning_rate = cfg['train']['learning_rate']
     grad_clip = paddle.nn.ClipGradByGlobalNorm(cfg['train'][
-            'grad_clip_thresh'])
+        'grad_clip_thresh'])
     optimizer = paddle.optimizer.Adam(
         learning_rate=learning_rate,
         parameters=model.parameters(),
@@ -114,7 +115,7 @@ def main(args):
         local_rank,
         shuffle=True).dataloader
     iterator = iter(tqdm(loader))
-    
+
     while global_step <= cfg['train']['max_iteration']:
         try:
             batch = next(iterator)
@@ -122,7 +123,7 @@ def main(args):
             iterator = iter(tqdm(loader))
             batch = next(iterator)
         (texts, mels, text_lens, output_lens, stop_tokens) = batch
-    
+
         start_time = time.perf_counter()
 
         #Forward
@@ -131,7 +132,7 @@ def main(args):
 
         mel_loss = paddle.nn.MSELoss()(mel_outputs, mels)
         post_mel_loss = paddle.nn.MSELoss()(mel_outputs_postnet, mels)
-        gate_loss = paddle.nn.BCELoss()(gate_outputs, stop_tokens)
+        gate_loss = paddle.nn.BCEWithLogitsLoss()(gate_outputs, stop_tokens)
         total_loss = mel_loss + post_mel_loss + gate_loss
 
         total_loss.backward()
@@ -139,7 +140,8 @@ def main(args):
 
         if local_rank == 0:
             writer.add_scalar('mel_loss', mel_loss.numpy(), global_step)
-            writer.add_scalar('post_mel_loss', post_mel_loss.numpy(), global_step)
+            writer.add_scalar('post_mel_loss',
+                              post_mel_loss.numpy(), global_step)
             writer.add_scalar('loss', total_loss.numpy(), global_step)
 
             writer.add_scalar('gate_loss', gate_loss.numpy(), global_step)
@@ -148,9 +150,11 @@ def main(args):
             for name, param in model.state_dict().items():
                 if param.trainable:
                     grad = param.gradient()
-                    writer.add_scalar("param.grad/"+name, np.linalg.norm(grad)/(grad.size), global_step)
-            writer.add_scalar('grad_norm', grad_clip.global_norm.numpy(),
-                              global_step)
+                    writer.add_scalar("param.grad/" + name,
+                                      np.linalg.norm(grad) / (grad.size),
+                                      global_step)
+            writer.add_scalar('grad_norm',
+                              grad_clip.global_norm.numpy(), global_step)
             if global_step % cfg['train']['image_interval'] == 1:
                 idx = np.random.randint(0, alignments.shape[0] - 1)
                 x = np.uint8(cm.viridis(alignments[idx].numpy()) * 255)
@@ -186,9 +190,12 @@ def main(args):
 
         model.clear_gradients()
         duration = time.perf_counter() - start_time
-        print("iteration:{}, mel_loss:{}, post_mel_loss:{}, gate_loss:{}, grad_norm:{}, {:.2f}s/it".format(
-            global_step, mel_loss.numpy(), post_mel_loss.numpy(), gate_loss.numpy(), grad_clip.global_norm.numpy(), duration
-        ))
+        print(
+            "iteration:{}, mel_loss:{}, post_mel_loss:{}, gate_loss:{}, grad_norm:{}, {:.2f}s/it".
+            format(global_step,
+                   mel_loss.numpy(),
+                   post_mel_loss.numpy(),
+                   gate_loss.numpy(), grad_clip.global_norm.numpy(), duration))
 
         # save checkpoint
         if local_rank == 0 and global_step != 0 and global_step % cfg['train'][
