@@ -55,6 +55,7 @@ def add_config_options_to_parser(parser):
 
 
 def main(args):
+    paddle.set_default_dtype("float64")
     local_rank = dist.get_rank()
     nranks = dist.get_world_size()
     parallel = nranks > 1

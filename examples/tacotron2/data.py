@@ -42,18 +42,17 @@ class LJSpeechLoader:
 
         LJSPEECH_ROOT = Path(data_path)
         dataset = LJSpeechDataset(LJSPEECH_ROOT)
-        
-        sampler = DistributedBatchSampler(dataset,
-                                        batch_size = batch_size,
-                                        shuffle = shuffle,
-                                        drop_last = True)
-        
-        self.dataloader = DataLoader(dataset,
-                                places=place,
-                                batch_sampler = sampler,
-                                collate_fn = batch_examples,
-                                num_workers = 0,
-                                use_shared_memory = True)
+
+        sampler = DistributedBatchSampler(
+            dataset, batch_size=batch_size, shuffle=shuffle, drop_last=True)
+
+        self.dataloader = DataLoader(
+            dataset,
+            places=place,
+            batch_sampler=sampler,
+            collate_fn=batch_examples,
+            num_workers=0,
+            use_shared_memory=True)
 
 
 class LJSpeechDataset(Dataset):
@@ -120,6 +119,7 @@ class LJSpeech(object):
             g2p.en.text_to_sequence(normalized_text), dtype=np.int64)
         return (mel, character)
 
+
 def batch_examples(batch):
     texts = []
     mels = []
@@ -164,7 +164,9 @@ def batch_examples(batch):
     # Pad sequence with largest len of the batch
     texts = TextIDBatcher(pad_id=0)(texts)  #(B, T)
     mels = np.transpose(
-        SpecBatcher(pad_value=0.)(mels), axes=(0, 2, 1))  #(B,T,C)
-    stop_tokens = TextIDBatcher(pad_id=1, dtype=np.float32)(stop_tokens)
+        SpecBatcher(pad_value=0.)(mels),
+        axes=(0, 2, 1)).astype('float64')  #(B,T,C)
+    stop_tokens = TextIDBatcher(
+        pad_id=1, dtype=np.float32)(stop_tokens).astype('float64')
 
     return (texts, mels, text_lens, output_lens, stop_tokens)

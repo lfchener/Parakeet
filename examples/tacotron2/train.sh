@@ -5,7 +5,7 @@ export CUDA_VISIBLE_DEVICES=7
 python -u train.py \
 --use_gpu=1 \
 --data='../../dataset/LJSpeech-1.1' \
---output='./experiment' \
+--output='./experiment_log' \
 --config='configs/ljspeech.yaml' \
 
 if [ $? -ne 0 ]; then

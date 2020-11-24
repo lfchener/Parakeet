@@ -26,7 +26,7 @@ network:
   postnet_n_convs: 5
 
 train:
-  batch_size: 32
+  batch_size: 16
   learning_rate: 0.001
   weight_decay: 0.000001
   grad_clip_thresh: 1.0 #the threshold of grad clip.
