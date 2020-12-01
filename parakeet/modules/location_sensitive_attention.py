@@ -75,12 +75,12 @@ class LocationSensitiveAttention(nn.Layer):
                 attention_hidden_state, axis=[1]))  #[B, 1, C]
         processed_attention_weights = self.location_layer(
             attention_weights_cat)  #[B, T, C]
-        energies = self.value(
+        alignment = self.value(
             paddle.tanh(processed_attention_weights + processed_memory +
                         processed_query))  #[B, T, 1]
 
         if mask is not None:
-            alignment = energies + mask * -1e9  # [B, T, 1]
+            alignment = alignment + mask * -1e9  # [B, T, 1]
 
         attention_weights = F.softmax(alignment, axis=1)  #[B, T, 1]
         attention_context = paddle.matmul(

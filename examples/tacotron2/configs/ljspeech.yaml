@@ -6,6 +6,7 @@ audio:
   win_length: 1024 #the length (width) of the window function.
   mel_fmin: 0
   mel_fmax: 8000
+  power: 1.2
 
 network:
   n_frames_per_step: 1

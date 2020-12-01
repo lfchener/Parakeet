@@ -151,21 +151,23 @@ class Decoder(nn.Layer):
         return mel_outputs, gate_outputs, alignments
 
     def inference(self, memory, gate_threshold=0.5, max_decoder_steps=1000):
+        # memory.shape = (B, T, C)
         batch_size = memory.shape[0]
         decoder_input = paddle.zeros(
             shape=[batch_size, self.n_mel_channels * self.n_frames_per_step],
             dtype=memory.dtype)  #[B, C]
 
-        self.initialize_decoder_states(memory, mask=None)
+        self.initialize_decoder_states(memory)
+        self.mask = None
 
         mel_outputs, gate_outputs, alignments = [], [], []
         while True:
-            decoder_input = self.prenet(decoder_input)
-            mel_output, gate_output, alignment = self.decode(decoder_input)
+            decoder_input = self.prenet(decoder_input)  #(B, T, C)
+            mel_output, gate_output, alignment = self.decode(
+                decoder_input)  #[B, C], [B, 1], [B, T]
 
             mel_outputs += [mel_output]
-            gate_outputs += [paddle.squeeze(
-                gate_output, axes=[1])]  #！！！！diff！！！
+            gate_outputs += [gate_output]
             alignments += [alignment]
 
             if F.sigmoid(gate_output) > gate_threshold:
@@ -176,10 +178,8 @@ class Decoder(nn.Layer):
 
             decoder_input = mel_output
 
-        alignments = paddle.stack(alignments, axis=1)  #[B, T]
-        gate_outputs = paddle.stack(gate_outputs, axis=1)  #[B, T]
-        mel_output = paddle.stack(mel_output, axis=1)  #[B, T, C]
-        mel_output = paddle.reshape(
-            mel_output, shape=[0, -1, self.n_mel_channels])  #[B, T, C]
+        alignments = paddle.stack(alignments, axis=1)  #[B, T, T]
+        gate_outputs = paddle.concat(gate_outputs, axis=1)  #[B, T]
+        mel_outputs = paddle.stack(mel_outputs, axis=1)  #[B, T, C]
 
         return mel_outputs, gate_outputs, alignments

@@ -18,6 +18,7 @@ from paddle import nn
 import paddle.nn.functional as F
 import time
 
+
 class ConvNorm(nn.Layer):
     def __init__(self,
                  in_channels,
@@ -96,14 +97,11 @@ class Encoder(nn.Layer):
         return output
 
     def inference(self, x):
+        # x.shape = [B, T, C]
+
         for conv, batchnorm in zip(self.convolutions, self.batchnorms):
-            x = F.dropout(F.relu(batchnorm(conv(x))), 0.5)  #(B, C, T)
+            x = F.dropout(F.relu(batchnorm(conv(x))), 0.5)  #(B, T, C)
 
-        x = paddle.transpose(x, [0, 2, 1])  # (B, T, C)
-
-        lstm_forward = self.lstm_forward(x)
-        lstm_reverse = self.lstm_reverse(x)
-
-        output = paddle.concat([lstm_forward, lstm_reverse], axis=-1)
+        output, _ = self.lstm(inputs=x)
 
         return output

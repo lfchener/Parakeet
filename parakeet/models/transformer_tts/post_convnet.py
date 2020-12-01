@@ -56,9 +56,8 @@ class PostConvNet(nn.Layer):
                 padding=padding,
                 weight_attr=paddle.ParamAttr(
                     initializer=nn.initializer.XavierUniform()),
-                bias_attr=paddle.ParamAttr(
-                    initializer=nn.initializer.Uniform(
-                        low=-k, high=k)),
+                bias_attr=paddle.ParamAttr(initializer=nn.initializer.Uniform(
+                    low=-k, high=k)),
                 data_format='NLC'))
 
         k = math.sqrt(1.0 / num_hidden)
@@ -84,9 +83,8 @@ class PostConvNet(nn.Layer):
                 padding=padding,
                 weight_attr=paddle.ParamAttr(
                     initializer=nn.initializer.XavierUniform()),
-                bias_attr=paddle.ParamAttr(
-                    initializer=nn.initializer.Uniform(
-                        low=-k, high=k)),
+                bias_attr=paddle.ParamAttr(initializer=nn.initializer.Uniform(
+                    low=-k, high=k)),
                 data_format='NLC'))
 
         for i, layer in enumerate(self.conv_list):
@@ -119,13 +117,10 @@ class PostConvNet(nn.Layer):
             conv = self.conv_list[i]
 
             input = F.dropout(
-                F.tanh(batch_norm(conv(input)[:, :, :len])),
-                self.dropout)
+                F.tanh(batch_norm(conv(input)[:, :len, :])), self.dropout)
         conv = self.conv_list[self.num_conv - 1]
-        input = conv(input)[:, :, :len]
+        input = conv(input)[:, :len, :]
         if self.batchnorm_last:
             batch_norm = self.batch_norm_list[self.num_conv - 1]
-            input = F.dropout(
-                batch_norm(input),
-                self.dropout)
+            input = F.dropout(batch_norm(input), self.dropout)
         return input

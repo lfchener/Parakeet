@@ -93,12 +93,13 @@ class Tacotron2(nn.Layer):
 
         return mel_outputs, mel_outputs_postnet, gate_outputs, alignments
 
-    def inference(self, inputs):
-        embedded_inputs = paddle.tensor.transpose(
-            self.embedding(inputs), [0, 2, 1])  #(B, C, T)
-        encoder_outputs = self.encoder.inference(embedded_inputs)
+    def inference(self, inputs, gate_threshold=0.5, max_decoder_steps=1000):
+        embedded_inputs = self.embedding(inputs)  #(B, T, C)
+        encoder_outputs = self.encoder.inference(embedded_inputs)  #(B, T, C)
         mel_outputs, gate_outputs, alignments = self.decoder.inference(
-            encoder_outputs)  #[B, T, C]
+            encoder_outputs,
+            gate_threshold=gate_threshold,
+            max_decoder_steps=max_decoder_steps)  #[B, T, C]
 
         mel_outputs_postnet = self.postnet(mel_outputs)
         mel_outputs_postnet = mel_outputs + mel_outputs_postnet
