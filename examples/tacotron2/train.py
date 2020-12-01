@@ -104,6 +104,7 @@ def main(args):
     print("Rank {}: checkpoint loaded.".format(local_rank))
 
     if parallel:
+        dist.init_parallel_env()
         model = paddle.DataParallel(model)
 
     loader = LJSpeechLoader(
