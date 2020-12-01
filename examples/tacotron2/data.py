@@ -165,8 +165,8 @@ def batch_examples(batch):
     texts = TextIDBatcher(pad_id=0)(texts)  #(B, T)
     mels = np.transpose(
         SpecBatcher(pad_value=0.)(mels),
-        axes=(0, 2, 1)).astype('float64')  #(B,T,C)
+        axes=(0, 2, 1)).astype('float32')  #(B,T,C)
     stop_tokens = TextIDBatcher(
-        pad_id=1, dtype=np.float32)(stop_tokens).astype('float64')
+        pad_id=1, dtype=np.float32)(stop_tokens).astype('float32')
 
     return (texts, mels, text_lens, output_lens, stop_tokens)

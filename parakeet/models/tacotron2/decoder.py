@@ -19,6 +19,7 @@ from parakeet.models.transformer_tts.prenet import PreNet
 from parakeet.modules.location_sensitive_attention import LocationSensitiveAttention
 import time
 
+
 class Decoder(nn.Layer):
     def __init__(self, n_mels, n_frames_per_step, encoder_embedding_dim,
                  prenet_dim, attention_rnn_dim, decoder_rnn_dim, attention_dim,
@@ -41,8 +42,8 @@ class Decoder(nn.Layer):
             dropout_rate=0.5,
             bias=False)
 
-        self.attention_rnn = nn.LSTMCell(
-            prenet_dim + encoder_embedding_dim, attention_rnn_dim)
+        self.attention_rnn = nn.LSTMCell(prenet_dim + encoder_embedding_dim,
+                                         attention_rnn_dim)
 
         self.attention_layer = LocationSensitiveAttention(
             attention_rnn_dim, encoder_embedding_dim, attention_dim,
@@ -76,22 +77,27 @@ class Decoder(nn.Layer):
             shape=[batch_size, self.encoder_embedding_dim], dtype=memory.dtype)
 
         self.memory = memory  #[B, T, C]
+        self.processed_memory = self.attention_layer.memory_layer(
+            memory)  #[B, T, C]
 
     def decode(self, decoder_input):
         # decoder_input.shape=[B, C]
         cell_input = paddle.concat(
             [decoder_input, self.attention_context], axis=-1)  #[B, C]
-        
+
         _, (self.attention_hidden, self.attention_cell) = self.attention_rnn(
             cell_input, (self.attention_hidden,
                          self.attention_cell))  #[B, C], [B, C]
-        
-        self.attention_hidden = F.dropout(self.attention_hidden, self.p_attention_dropout)  #[B, C]
-        attention_weights_cat = paddle.stack([self.attention_weights, self.attention_weights_cum], axis=-1)  #[B, T, 2]
+
+        self.attention_hidden = F.dropout(self.attention_hidden,
+                                          self.p_attention_dropout)  #[B, C]
+        attention_weights_cat = paddle.stack(
+            [self.attention_weights, self.attention_weights_cum],
+            axis=-1)  #[B, T, 2]
 
         self.attention_context, self.attention_weights = self.attention_layer(
-            self.attention_hidden, self.memory, attention_weights_cat,
-            self.mask)  #[B, C], [B, T]
+            self.attention_hidden, self.processed_memory, self.memory,
+            attention_weights_cat, self.mask)  #[B, C], [B, T]
 
         self.attention_weights_cum += self.attention_weights  #[B, T]
         decoder_input = paddle.concat(
@@ -99,7 +105,8 @@ class Decoder(nn.Layer):
         _, (self.decoder_hidden, self.decoder_cell) = self.decoder_rnn(
             decoder_input, (self.decoder_hidden,
                             self.decoder_cell))  #[B, C] [B, C]
-        self.decoder_hidden = F.dropout(self.decoder_hidden, p = self.p_decoder_dropout)  #[B, C]
+        self.decoder_hidden = F.dropout(
+            self.decoder_hidden, p=self.p_decoder_dropout)  #[B, C]
 
         decoder_hidden_attention_context = paddle.concat(
             [self.decoder_hidden, self.attention_context], axis=-1)  #[B, 2C]
@@ -124,7 +131,8 @@ class Decoder(nn.Layer):
         decoder_inputs = self.prenet(decoder_inputs)  #(B, T, C)
 
         # mel 频谱每个 time step 的 mask，所以少了 T_mel 维
-        self.mask = paddle.cast(memory[:,:,0:1] == 0, dtype=memory.dtype) #(B, T, 1)
+        self.mask = paddle.cast(
+            memory[:, :, 0:1] == 0, dtype=memory.dtype)  #(B, T, 1)
         self.initialize_decoder_states(memory)
         mel_outputs, gate_outputs, alignments = [], [], []
 
