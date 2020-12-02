@@ -173,7 +173,7 @@ def main(args):
                     label='target')
                 ax.scatter(
                     range(len(gate_outputs[idx].numpy())),
-                    gate_outputs[idx].numpy(),
+                    1 / (1 + np.exp(gate_outputs[idx].numpy())),
                     alpha=0.5,
                     color='red',
                     marker='.',
