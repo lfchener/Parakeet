@@ -29,6 +29,8 @@ from parakeet.models.tacotron2.tacotron2 import Tacotron2
 
 from parakeet.utils import io
 from parakeet.g2p.en import text_to_sequence
+from parakeet.models.waveflow import WaveFlowModule
+from parakeet.modules.weight_norm import WeightNormWrapper
 
 
 def add_config_options_to_parser(parser):
@@ -69,6 +71,7 @@ def add_config_options_to_parser(parser):
         help="path to save experiment results")
 
 
+@paddle.fluid.dygraph.no_grad
 def synthesis(text_input, args):
     local_rank = dist.get_rank()
 
@@ -117,6 +120,10 @@ def synthesis(text_input, args):
     if args.vocoder == 'griffin-lim':
         #synthesis use griffin-lim
         wav = synthesis_with_griffinlim(mel_outputs_postnet, cfg['audio'])
+    elif args.vocoder == 'waveflow':
+        # synthesis use waveflow
+        wav = synthesis_with_waveflow(mel_outputs_postnet, args,
+                                      args.checkpoint_vocoder)
     else:
         print(
             'vocoder error, we only support griffinlim and waveflow, but recevied %s.'
@@ -152,6 +159,28 @@ def synthesis_with_griffinlim(mel_output, cfg):
         win_length=cfg['win_length'])
 
     return wav
+
+
+def synthesis_with_waveflow(mel_output, args, checkpoint):
+    args.config = args.config_vocoder
+    args.use_fp16 = False
+    config = io.add_yaml_config_to_args(args)
+
+    mel_spectrogram = paddle.transpose(paddle.squeeze(mel_output, [0]), [1, 0])
+    mel_spectrogram = paddle.unsqueeze(mel_spectrogram, [0])
+
+    # Build model.
+    waveflow = WaveFlowModule(config)
+    model_dict = paddle.load(checkpoint + ".pdparams")
+    waveflow.set_state_dict(model_dict)
+
+    for layer in waveflow.sublayers():
+        if isinstance(layer, WeightNormWrapper):
+            layer.remove_weight_norm()
+
+    # Run model inference.
+    wav = waveflow.synthesize(mel_spectrogram, sigma=config.sigma)
+    return wav.numpy()[0]
 
 
 if __name__ == '__main__':
