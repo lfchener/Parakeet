@@ -619,7 +619,12 @@ class Tacotron2(nn.Layer):
             num_layers=postnet_conv_layers,
             dropout=p_postnet_dropout)
 
-    def forward(self, text_inputs, mels, text_lens, output_lens=None):
+    def forward(self,
+                text_inputs,
+                mels,
+                text_lens,
+                output_lens=None,
+                speaker_embedding=None):
         """Calculate forward propagation of tacotron2.
 
         Parameters
@@ -636,6 +641,9 @@ class Tacotron2(nn.Layer):
         output_lens: Tensor [shape=(B,)], optional
             Batch of lengths of each mels batch. Defaults to None.
         
+        speaker_embedding: Tensor [shape=(B, embed_dim)], optional
+            Batch of speaker embedding. Defaults to None.
+        
         Returns
         -------
         outputs : Dict[str, Tensor]
@@ -650,6 +658,16 @@ class Tacotron2(nn.Layer):
         """
         embedded_inputs = self.embedding(text_inputs)
         encoder_outputs = self.encoder(embedded_inputs, text_lens)
+
+        ### SV2TT2 ###
+
+        # Append the speaker embedding to the encoder output at each timestep
+        if speaker_embedding:
+            speaker_embedding = paddle.unsqueeze(speaker_embedding, axis=1)
+            encoder_outputs = paddle.concat(
+                [encoder_outputs, speaker_embedding], axis=2)
+
+        ##############
 
         mask = paddle.tensor.unsqueeze(
             paddle.fluid.layers.sequence_mask(
@@ -678,7 +696,11 @@ class Tacotron2(nn.Layer):
         return outputs
 
     @paddle.no_grad()
-    def infer(self, text_inputs, stop_threshold=0.5, max_decoder_steps=1000):
+    def infer(self,
+              text_inputs,
+              stop_threshold=0.5,
+              max_decoder_steps=1000,
+              speaker_embedding=None):
         """Generate the mel sepctrogram of features given the sequences of character ids.
 
         Parameters
@@ -706,6 +728,17 @@ class Tacotron2(nn.Layer):
         """
         embedded_inputs = self.embedding(text_inputs)
         encoder_outputs = self.encoder(embedded_inputs)
+
+        ### SV2TT2 ###
+
+        # Append the speaker embedding to the encoder output at each timestep
+        if speaker_embedding:
+            speaker_embedding = paddle.unsqueeze(speaker_embedding, axis=1)
+            encoder_outputs = paddle.concat(
+                [encoder_outputs, speaker_embedding], axis=2)
+
+        ##############
+
         mel_outputs, stop_logits, alignments = self.decoder.infer(
             encoder_outputs,
             stop_threshold=stop_threshold,
@@ -724,7 +757,11 @@ class Tacotron2(nn.Layer):
         return outputs
 
     @paddle.no_grad()
-    def predict(self, text, stop_threshold=0.5, max_decoder_steps=1000):
+    def predict(self,
+                text,
+                stop_threshold=0.5,
+                max_decoder_steps=1000,
+                speaker_embedding=None):
         """Generate the mel sepctrogram of features given the sequenc of characters.
 
         Parameters
@@ -748,7 +785,8 @@ class Tacotron2(nn.Layer):
         """
         ids = np.asarray(self.frontend(text))
         ids = paddle.unsqueeze(paddle.to_tensor(ids, dtype='int64'), [0])
-        outputs = self.infer(ids, stop_threshold, max_decoder_steps)
+        outputs = self.infer(ids, speaker_embedding, stop_threshold,
+                             max_decoder_steps)
         return outputs['mel_outputs_postnet'][0].numpy(), outputs[
             'alignments'][0].numpy()
 
