@@ -43,8 +43,14 @@ def main(config, args):
         output_dir = Path(args.output).expanduser()
     output_dir.mkdir(exist_ok=True)
 
+    speaker_embedding = None
+    if config.model.speaker_embeding and args.speaker_embedding_path is not None:
+        speaker_embedding = paddle.unsqueeze(
+            paddle.to_tensor(np.load(args.speaker_embedding_path)), 0)
+
     for i, sentence in enumerate(sentences):
-        mel_output, _ = model.predict(sentence)
+        mel_output, _ = model.predict(
+            sentence, speaker_embedding=speaker_embedding)
         mel_output = mel_output.T
 
         np.save(str(output_dir / f"sentence_{i}"), mel_output)
@@ -65,6 +71,11 @@ if __name__ == "__main__":
         help="extra config to overwrite the default config")
     parser.add_argument(
         "--checkpoint_path", type=str, help="path of the checkpoint to load.")
+    parser.add_argument(
+        "--speaker_embedding_path",
+        type=str,
+        default=None,
+        help="path of the speaker embedding file.")
     parser.add_argument("--input", type=str, help="path of the text sentences")
     parser.add_argument("--output", type=str, help="path to save outputs")
     parser.add_argument(

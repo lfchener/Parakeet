@@ -30,6 +30,7 @@ from parakeet.models.tacotron2 import Tacotron2, Tacotron2Loss
 
 from config import get_cfg_defaults
 from ljspeech import LJSpeech, LJSpeechCollector
+from librispeech import LibriSpeech, LibriSpeechCollector
 
 
 class Experiment(ExperimentBase):
@@ -51,9 +52,15 @@ class Experiment(ExperimentBase):
 
         self.optimizer.clear_grad()
         self.model.train()
-        texts, mels, text_lens, output_lens, stop_tokens = batch
-        outputs = self.model(texts, mels, text_lens, output_lens)
-        losses = self.compute_losses(batch, outputs)
+        if self.config.model.speaker_embeding:
+            texts, mels, text_lens, output_lens, stop_tokens, speaker_embedding = batch
+            outputs = self.model(texts, mels, text_lens, output_lens,
+                                 speaker_embedding)
+        else:
+            texts, mels, text_lens, output_lens, stop_tokens = batch
+            outputs = self.model(texts, mels, text_lens, output_lens)
+        losses = self.compute_losses(
+            (texts, mels, text_lens, output_lens, stop_tokens), outputs)
         loss = losses["loss"]
         loss.backward()
         self.optimizer.step()
@@ -79,9 +86,15 @@ class Experiment(ExperimentBase):
     def valid(self):
         valid_losses = defaultdict(list)
         for i, batch in enumerate(self.valid_loader):
-            texts, mels, text_lens, output_lens, stop_tokens = batch
-            outputs = self.model(texts, mels, text_lens, output_lens)
-            losses = self.compute_losses(batch, outputs)
+            if self.config.model.speaker_embeding:
+                texts, mels, text_lens, output_lens, stop_tokens, speaker_embedding = batch
+                outputs = self.model(texts, mels, text_lens, output_lens,
+                                     speaker_embedding)
+            else:
+                texts, mels, text_lens, output_lens, stop_tokens = batch
+                outputs = self.model(texts, mels, text_lens, output_lens)
+            losses = self.compute_losses(
+                (texts, mels, text_lens, output_lens, stop_tokens), outputs)
             for k, v in losses.items():
                 valid_losses[k].append(float(v))
 
@@ -132,7 +145,8 @@ class Experiment(ExperimentBase):
             p_prenet_dropout=config.model.p_prenet_dropout,
             p_attention_dropout=config.model.p_attention_dropout,
             p_decoder_dropout=config.model.p_decoder_dropout,
-            p_postnet_dropout=config.model.p_postnet_dropout)
+            p_postnet_dropout=config.model.p_postnet_dropout,
+            d_speaker_embedding=config.model.d_speaker_embedding)
 
         if self.parallel:
             model = paddle.DataParallel(model)
@@ -153,11 +167,22 @@ class Experiment(ExperimentBase):
     def setup_dataloader(self):
         args = self.args
         config = self.config
-        ljspeech_dataset = LJSpeech(args.data)
+        if config.data.dataset == 'ljspeech':
+            ljspeech_dataset = LJSpeech(args.data)
 
-        valid_set, train_set = dataset.split(ljspeech_dataset,
-                                             config.data.valid_size)
-        batch_fn = LJSpeechCollector(padding_idx=config.data.padding_idx)
+            valid_set, train_set = dataset.split(ljspeech_dataset,
+                                                 config.data.valid_size)
+            batch_fn = LJSpeechCollector(padding_idx=config.data.padding_idx)
+        elif config.data.dataset == 'librispeech':
+            librispeech_dataset = LibriSpeech(args.data)
+
+            valid_set, train_set = dataset.split(librispeech_dataset,
+                                                 config.data.valid_size)
+            batch_fn = LibriSpeechCollector(
+                padding_idx=config.data.padding_idx, padding_value=-4)
+        else:
+            raise RuntimeError(
+                'We only support ljspeech and librispeech dataset.')
 
         if not self.parallel:
             self.train_loader = DataLoader(

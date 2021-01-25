@@ -594,7 +594,8 @@ class Tacotron2(nn.Layer):
                  p_prenet_dropout: float=0.5,
                  p_attention_dropout: float=0.1,
                  p_decoder_dropout: float=0.1,
-                 p_postnet_dropout: float=0.5):
+                 p_postnet_dropout: float=0.5,
+                 d_speaker_embedding: int=0):
         super().__init__()
 
         self.frontend = frontend
@@ -608,10 +609,10 @@ class Tacotron2(nn.Layer):
         self.encoder = Tacotron2Encoder(d_encoder, encoder_conv_layers,
                                         encoder_kernel_size, p_encoder_dropout)
         self.decoder = Tacotron2Decoder(
-            d_mels, reduction_factor, d_encoder, d_prenet, d_attention_rnn,
-            d_decoder_rnn, d_attention, attention_filters,
-            attention_kernel_size, p_prenet_dropout, p_attention_dropout,
-            p_decoder_dropout)
+            d_mels, reduction_factor, d_encoder + d_speaker_embedding,
+            d_prenet, d_attention_rnn, d_decoder_rnn, d_attention,
+            attention_filters, attention_kernel_size, p_prenet_dropout,
+            p_attention_dropout, p_decoder_dropout)
         self.postnet = DecoderPostNet(
             d_mels=d_mels * reduction_factor,
             d_hidden=d_postnet,
@@ -662,8 +663,11 @@ class Tacotron2(nn.Layer):
         ### SV2TT2 ###
 
         # Append the speaker embedding to the encoder output at each timestep
-        if speaker_embedding:
+        if speaker_embedding is not None:
             speaker_embedding = paddle.unsqueeze(speaker_embedding, axis=1)
+            speaker_embedding = paddle.tile(
+                speaker_embedding,
+                repeat_times=[1, encoder_outputs.shape[1], 1])
             encoder_outputs = paddle.concat(
                 [encoder_outputs, speaker_embedding], axis=2)
 
@@ -732,8 +736,11 @@ class Tacotron2(nn.Layer):
         ### SV2TT2 ###
 
         # Append the speaker embedding to the encoder output at each timestep
-        if speaker_embedding:
+        if speaker_embedding is not None:
             speaker_embedding = paddle.unsqueeze(speaker_embedding, axis=1)
+            speaker_embedding = paddle.tile(
+                speaker_embedding,
+                repeat_times=[1, encoder_outputs.shape[1], 1])
             encoder_outputs = paddle.concat(
                 [encoder_outputs, speaker_embedding], axis=2)
 
@@ -785,8 +792,11 @@ class Tacotron2(nn.Layer):
         """
         ids = np.asarray(self.frontend(text))
         ids = paddle.unsqueeze(paddle.to_tensor(ids, dtype='int64'), [0])
-        outputs = self.infer(ids, speaker_embedding, stop_threshold,
-                             max_decoder_steps)
+        outputs = self.infer(
+            ids,
+            stop_threshold,
+            max_decoder_steps,
+            speaker_embedding=speaker_embedding)
         return outputs['mel_outputs_postnet'][0].numpy(), outputs[
             'alignments'][0].numpy()
 
@@ -829,7 +839,8 @@ class Tacotron2(nn.Layer):
                     p_prenet_dropout=config.model.p_prenet_dropout,
                     p_attention_dropout=config.model.p_attention_dropout,
                     p_decoder_dropout=config.model.p_decoder_dropout,
-                    p_postnet_dropout=config.model.p_postnet_dropout)
+                    p_postnet_dropout=config.model.p_postnet_dropout,
+                    d_speaker_embedding=config.model.d_speaker_embedding)
 
         checkpoint.load_parameters(model, checkpoint_path=checkpoint_path)
         return model

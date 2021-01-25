@@ -17,6 +17,7 @@ from yacs.config import CfgNode as CN
 _C = CN()
 _C.data = CN(
     dict(
+        dataset='ljspeech',  # dataset be used to train, only support ljspeech and librispeech 
         batch_size=32,  # batch size
         valid_size=64,  # the first N examples are reserved for validation
         sample_rate=22050,  # Hz, sample rate
@@ -31,6 +32,7 @@ _C.data = CN(
 
 _C.model = CN(
     dict(
+        speaker_embeding=False,  # train with speaker embeding
         reduction_factor=1,  # reduction factor
         d_encoder=512,  # embedding & encoder's internal size
         encoder_conv_layers=3,  # number of conv layer in tacotron2 encoder
@@ -48,7 +50,8 @@ _C.model = CN(
         p_prenet_dropout=0.5,  # droput probability in decoder prenet
         p_attention_dropout=0.1,  # droput probability of first rnn layer in decoder
         p_decoder_dropout=0.1,  # droput probability of second rnn layer in decoder
-        p_postnet_dropout=0.5,  #droput probability in decoder postnet
+        p_postnet_dropout=0.5,  # droput probability in decoder postnet
+        d_speaker_embedding=0,  # speaker embedding dim, set to 0 if don't have speaker embedding
     ))
 
 _C.training = CN(
